@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Burst.Intrinsics;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -14,6 +15,12 @@ public class Generator : MonoBehaviour
 
     private bool ran = false;
     private Face start;
+
+    private List<Vertex> startLoop = new List<Vertex>();
+    private List<Vertex> nextLoop = new List<Vertex>();
+    private int startLoopCount = 0;
+
+    Vector2[] directions = {Vector2.right, Vector2.left, Vector2.down, Vector2.up};
     // Start is called before the first frame update
     void Start()
     {
@@ -36,12 +43,15 @@ public class Generator : MonoBehaviour
             vertex2.edges.Add(edge);
 
             edges.Add(edge);
+            startLoop.Add(vertex1);
         }
 
+        /*
         foreach (Edge edge in edges)
         {
             edge.transform.parent = envelope.transform;
         }
+        */
 
         start = new Face(edges);
         faces.Add(start);
@@ -49,84 +59,86 @@ public class Generator : MonoBehaviour
 
     private void Update()
     {
-        if (!ran) DivideOnAngles(start);
-        ran = true;
+        if (startLoop.Count != 0)
+        {
+            startLoopCount++;
+
+            if (startLoopCount == startLoop.Count * 2)
+            {
+                startLoop.Clear();
+                foreach (Vertex v in nextLoop) startLoop.Add(v);
+                nextLoop.Clear();
+                startLoopCount = 0;
+            } else DivideOnVertex(startLoop[startLoopCount / 2]);
+         
+        }
     }
 
-    public void DivideOnAngles(Face face)
+
+    void DivideOnVertex(Vertex origin)
     {
-        for (int i = 0; i < face.edges.Count; i++)
-        {
-            int j = i + 1;
-            if (j == face.edges.Count) j = 0;
+            List<Vertex> newVertices = new List<Vertex>();
 
-            if (Vector3.SignedAngle(face.edges[i].Direction, face.edges[j].Direction, Vector3.forward) <= 0) {
+        Debug.Log(origin.transform.position);
 
-                if (face.edges[i].FindCommonVertex(face.edges[j]) == null)
+            foreach (Vector2 direction in directions)
+            {
+                RaycastHit2D[] hits = Physics2D.RaycastAll(origin.transform.position, direction);
+
+                foreach (RaycastHit2D hit in hits)
                 {
-                    continue;
+                    if (hit.collider.gameObject == origin.gameObject) continue;
+                if (hit.collider.gameObject.tag == "Vertex")
+                {
+                    break;
                 }
 
-                Vertex common = face.edges[i].FindCommonVertex(face.edges[j]).GetComponent<Vertex>();
-
-                Debug.Log(common.gameObject.name);
-
-                List<Vertex> newVertices = new List<Vertex>();
-
-                // shoot line from vertex & check if connects
-                foreach (Edge edge in common.edges)
-                {
-                    Vector2 direction = common.transform.position - edge.transform.position;
-                    RaycastHit2D[] hits = Physics2D.RaycastAll(common.transform.position, direction);
-
-                    foreach (RaycastHit2D hit in hits)
+                    if (hit.collider.gameObject.tag == "Edge")
                     {
-                        if (hit.collider.gameObject == common.gameObject) continue;
-                        if (hit.collider.gameObject.tag == "Vertex") break;
+                        Edge hitEdge = hit.collider.gameObject.GetComponent<Edge>();
+                        if (origin.edges.Contains(hitEdge) || Vector3.Angle(hitEdge.Direction, direction) == 0 ||
+                            Vector3.Angle(hitEdge.Direction, direction) == 180) continue;
 
-                        if (hit.collider.gameObject.tag == "Edge")
-                        {
-                            Edge hitEdge = hit.collider.gameObject.GetComponent<Edge>();
-                            if (common.edges.Contains(hitEdge)) continue;
+                        // divide & connect
 
-                            // divide & connect
+                        // divide
+                        float edgeWidth = hitEdge.transform.localScale.y;
+                        Vector3 position = hit.point + edgeWidth / 2 * direction.normalized;
+                        Vertex vertex = Instantiate(vertexPrefab);
+                        vertex.transform.position = position;
+                        //vertex.transform.parent = envelope.transform;
+                        vertex.transform.SetSiblingIndex(hitEdge.Vertex1.transform.GetSiblingIndex() + 1);
+                        hitEdge.DivideEdge(vertex);
 
-                            // divide
-                            float edgeWidth = hitEdge.transform.localScale.y;
-                            Vector3 position = hit.point + edgeWidth/2 * direction.normalized;
-                            Vertex vertex = Instantiate(vertexPrefab);
-                            vertex.transform.position = position;
-                            vertex.transform.parent = envelope.transform;
-                            vertex.transform.SetSiblingIndex(hitEdge.Vertex1.transform.GetSiblingIndex() + 1);
-                            hitEdge.DivideEdge(vertex);
+                        //Debug.Log(common.transform.GetSiblingIndex()  + " " + vertex.transform.GetSiblingIndex() +
+                        //    hitEdge.name + hitEdge.transform.GetSiblingIndex());
 
-                            Debug.Log(common.transform.GetSiblingIndex()  + " " + vertex.transform.GetSiblingIndex() +
-                                hitEdge.name + hitEdge.transform.GetSiblingIndex());
+                        newVertices.Add(vertex);
 
-                            newVertices.Add(vertex);
-
-                            break;
-                        }
+                        break;
                     }
-                }
-
-                // connect
-
-                if (newVertices.Count != 0)
-                {
-                    foreach (Vertex vertex in newVertices)
-                    {
-                        Edge connect = Instantiate(edgePrefab);
-                        connect.Vertex1 = common;
-                        connect.Vertex2 = vertex;
-                        connect.UpdatePosition();
-
-                        common.edges.Add(connect);
-                        vertex.edges.Add(connect);
-                    }
-                    
                 }
             }
-        }
+
+            // connect
+
+
+
+            if (newVertices.Count != 0)
+            {
+                foreach (Vertex vertex in newVertices)
+                {
+                    Edge connect = Instantiate(edgePrefab);
+                    connect.Vertex1 = origin;
+                    connect.Vertex2 = vertex;
+                    connect.UpdatePosition();
+
+                    origin.edges.Add(connect);
+                    vertex.edges.Add(connect);
+
+                    nextLoop.Add(vertex);
+                }
+
+            }
     }
 }

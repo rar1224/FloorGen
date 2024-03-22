@@ -47,17 +47,13 @@ public class Edge : MonoBehaviour
         other.Vertex2 = Vertex2;
         other.UpdatePosition();
 
-        this.Vertex2 = divider;
         Vertex2.edges.Remove(this);
         Vertex2.edges.Add(other);
+
+        this.Vertex2 = divider;
         this.UpdatePosition();
 
         divider.edges.Add(this);
         divider.edges.Add(other);
-
-        foreach(Face face in faces)
-        {
-            face.edges.Add(other);
-        }
     }
 }
