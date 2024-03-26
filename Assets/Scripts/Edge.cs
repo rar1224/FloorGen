@@ -40,7 +40,7 @@ public class Edge : MonoBehaviour
         else return null;
     }
 
-    public void DivideEdge(Vertex divider)
+    public Edge DivideEdge(Vertex divider)
     {
         Edge other = Instantiate(this);
         other.Vertex1 = divider;
@@ -55,5 +55,7 @@ public class Edge : MonoBehaviour
 
         divider.edges.Add(this);
         divider.edges.Add(other);
+
+        return other;
     }
 }

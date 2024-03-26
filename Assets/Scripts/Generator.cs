@@ -11,7 +11,9 @@ public class Generator : MonoBehaviour
     public Vertex vertexPrefab;
     public Edge edgePrefab;
 
-    private List<Face> faces = new List<Face>();
+    //private List<Face> faces = new List<Face>();
+    public List<Vertex> allVertices = new List<Vertex>();
+    public List<Edge> allEdges = new List<Edge>();
 
     private bool ran = false;
     private Face start;
@@ -44,20 +46,16 @@ public class Generator : MonoBehaviour
 
             edges.Add(edge);
             startLoop.Add(vertex1);
-        }
 
-        /*
-        foreach (Edge edge in edges)
-        {
-            edge.transform.parent = envelope.transform;
+            allEdges.Add(edge);
+            allVertices.Add(vertex1);
         }
-        */
 
         start = new Face(edges);
-        faces.Add(start);
+        //faces.Add(start);
     }
 
-    private void Update()
+    private void FixedUpdate()
     {
         if (startLoop.Count != 0)
         {
@@ -79,7 +77,7 @@ public class Generator : MonoBehaviour
     {
             List<Vertex> newVertices = new List<Vertex>();
 
-        Debug.Log(origin.transform.position);
+            Debug.Log(origin.transform.position);
 
             foreach (Vector2 direction in directions)
             {
@@ -87,17 +85,22 @@ public class Generator : MonoBehaviour
 
                 foreach (RaycastHit2D hit in hits)
                 {
-                    if (hit.collider.gameObject == origin.gameObject) continue;
+                if (hit.collider.gameObject == origin.gameObject) continue;
+
                 if (hit.collider.gameObject.tag == "Vertex")
                 {
+                    // connect if not yet connected
+                    Vertex hitVertex = hit.collider.gameObject.GetComponent<Vertex>();
+
+                    if (!origin.IsConnectedTo(hitVertex)) newVertices.Add(hitVertex);
+
                     break;
                 }
 
                     if (hit.collider.gameObject.tag == "Edge")
                     {
                         Edge hitEdge = hit.collider.gameObject.GetComponent<Edge>();
-                        if (origin.edges.Contains(hitEdge) || Vector3.Angle(hitEdge.Direction, direction) == 0 ||
-                            Vector3.Angle(hitEdge.Direction, direction) == 180) continue;
+                        if (origin.edges.Contains(hitEdge) || Vector3.Angle(hitEdge.Direction, direction) != 90) break;
 
                         // divide & connect
 
@@ -108,12 +111,11 @@ public class Generator : MonoBehaviour
                         vertex.transform.position = position;
                         //vertex.transform.parent = envelope.transform;
                         vertex.transform.SetSiblingIndex(hitEdge.Vertex1.transform.GetSiblingIndex() + 1);
-                        hitEdge.DivideEdge(vertex);
-
-                        //Debug.Log(common.transform.GetSiblingIndex()  + " " + vertex.transform.GetSiblingIndex() +
-                        //    hitEdge.name + hitEdge.transform.GetSiblingIndex());
-
+                        Edge newEdge = hitEdge.DivideEdge(vertex);
                         newVertices.Add(vertex);
+
+                        allEdges.Add(newEdge);
+                        allVertices.Add(vertex);
 
                         break;
                     }
@@ -137,6 +139,8 @@ public class Generator : MonoBehaviour
                     vertex.edges.Add(connect);
 
                     nextLoop.Add(vertex);
+
+                    allEdges.Add(connect);
                 }
 
             }
