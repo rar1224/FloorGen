@@ -9,7 +9,9 @@ public class Edge : MonoBehaviour
 
     public List<Face> faces = new List<Face>();
 
-    public Vector3 Direction { get; set; }
+    public Vector2 Direction { get; set; }
+
+    public bool IsExterior = false;
 
     // Start is called before the first frame update
     void Start()
@@ -26,11 +28,11 @@ public class Edge : MonoBehaviour
     public void UpdatePosition()
     {
         transform.position = (Vertex1.transform.position + Vertex2.transform.position) / 2;
-        Vector3 directionVector = Vertex1.transform.position - Vertex2.transform.position;
+        Vector3 directionVector = Vertex2.transform.position - Vertex1.transform.position;
         transform.localScale = new Vector3(directionVector.magnitude, 0.1f, 1);
         Quaternion rotation = Quaternion.FromToRotation(Vector3.right, directionVector);
         transform.rotation = rotation;
-        Direction = directionVector;
+        Direction = directionVector.normalized;
     }
 
     public Vertex FindCommonVertex(Edge other)
@@ -56,6 +58,34 @@ public class Edge : MonoBehaviour
         divider.edges.Add(this);
         divider.edges.Add(other);
 
+        if (IsExterior) other.IsExterior = true;
+
         return other;
+    }
+
+    public Edge DivideEdgeReverse(Vertex divider)
+    {
+        Edge other = Instantiate(this);
+        other.Vertex2 = divider;
+        other.Vertex1 = Vertex1;
+        other.UpdatePosition();
+
+        Vertex1.edges.Remove(this);
+        Vertex1.edges.Add(other);
+
+        this.Vertex1 = divider;
+        this.UpdatePosition();
+
+        divider.edges.Add(this);
+        divider.edges.Add(other);
+
+        if (IsExterior) other.IsExterior = true;
+
+        return other;
+    }
+
+    public float GetLength()
+    {
+        return transform.localScale.x;
     }
 }

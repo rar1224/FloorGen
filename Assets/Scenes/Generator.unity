@@ -175,6 +175,8 @@ MonoBehaviour:
   envelope: {fileID: 1073654340}
   vertexPrefab: {fileID: 3194413762310587454, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
   edgePrefab: {fileID: 3644132911681782224, guid: 63648faf967a1bb47881a8640e4af162, type: 3}
+  allVertices: []
+  allEdges: []
 --- !u!4 &491412095
 Transform:
   m_ObjectHideFlags: 0
@@ -297,7 +299,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 2
+      value: 3.98
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.z
@@ -356,7 +358,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: 1.98
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.z
@@ -584,7 +586,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 2
+      value: 3.98
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.z
@@ -771,7 +773,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: 1.98
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.z
