@@ -16,6 +16,7 @@ public class Generator : MonoBehaviour
     //private List<Face> faces = new List<Face>();
     public List<Vertex> allVertices = new List<Vertex>();
     public List<Edge> allEdges = new List<Edge>();
+    public List<Face> allFaces = new List<Face>();
 
     private bool ran = false;
     private Face start;
@@ -24,7 +25,7 @@ public class Generator : MonoBehaviour
     private List<Vertex> nextLoop = new List<Vertex>();
     private int startLoopCount = 0;
 
-    Vector2[] directions = {Vector2.right, Vector2.left, Vector2.down, Vector2.up};
+    Vector2[] directions = {Vector2.right, Vector2.down, Vector2.left, Vector2.up};
     // Start is called before the first frame update
     void Start()
     {
@@ -54,7 +55,7 @@ public class Generator : MonoBehaviour
             allVertices.Add(vertex1);
         }
 
-        start = new Face(edges);
+        //start = new Face(edges);
         //faces.Add(start);
     }
 
@@ -73,20 +74,28 @@ public class Generator : MonoBehaviour
         } else if (status == Status.DividingEnvelopeIntoCells)
         {
             // dividing envelope into smaller cells
-
+            
+            
             startLoop = DivideToCells(2, 1, true, true);
             status = Status.DividingAllIntoCells;
             return;
+            
 
         } else if (status == Status.DividingAllIntoCells)
         {
+            
             // dividing rest into smaller cells
 
             if (startLoop.Count != 0)
             {
                 DivideCurrentLoop();
             }
-            else status = Status.Completed;
+            else status = Status.FindingFaces;
+
+        } else if (status == Status.FindingFaces)
+        {
+            FindFaces(allVertices[10]);
+            status = Status.Completed;
         }
     }
 
@@ -109,8 +118,6 @@ public class Generator : MonoBehaviour
     void DivideOnVertex(Vertex origin)
     {
             List<Vertex> newVertices = new List<Vertex>();
-
-            Debug.Log(origin.transform.position);
 
             foreach (Vector2 direction in directions)
             {
@@ -181,7 +188,7 @@ public class Generator : MonoBehaviour
             }
     }
 
-    public List<Vertex> DivideToCells(float maxCellHeight, float maxCellWidth, bool fromTop, bool fromLeft)
+    public List<Vertex> DivideToCells(float maxCellHeight, float maxCellWidth, bool fromTop, bool fromLeft, float minDistance = 0.5f)
     {
         List<Vertex> newVertices = new List<Vertex>();
         List<Edge> newEdges = new List<Edge>();
@@ -213,7 +220,7 @@ public class Generator : MonoBehaviour
                         divisionDirection = edge.Direction;
                     }
 
-                    divisions = (int)(edge.GetLength() / maxCellHeight) - 1;
+                    divisions = (int)(edge.GetLength() / maxCellHeight);
                 }
                 else if ((edge.Direction == Vector2.left || edge.Direction == Vector2.right)
                 && edge.GetLength() > maxCellWidth)
@@ -231,7 +238,7 @@ public class Generator : MonoBehaviour
                         divisionDirection = edge.Direction;
                     }
 
-                    divisions = (int)(edge.GetLength() / maxCellWidth) - 1;
+                    divisions = (int)(edge.GetLength() / maxCellWidth);
                 }
 
                 if (tooLong)
@@ -242,14 +249,59 @@ public class Generator : MonoBehaviour
 
                     for (int i = 0; i < divisions; i++)
                     {
-                        Vertex vertex = Instantiate(vertexPrefab);
+                        Vertex vertex = null;
 
-                        if (divisionDirection == Vector2.up || divisionDirection == Vector2.down)
-                            vertex.transform.position = (Vector2)origin.transform.position
-                           + (i + 1) * maxCellHeight * divisionDirection;
-                        else
-                            vertex.transform.position = (Vector2)origin.transform.position
-                               + (i + 1) * maxCellWidth * divisionDirection;
+                        if (i == divisions - 1)
+                        {
+                            /*
+                            vertex = Instantiate(vertexPrefab);
+
+                            if (divisionDirection == Vector2.up || divisionDirection == Vector2.down)
+                                vertex.transform.position = (Vector2)origin.transform.position
+                               + (i + 1) * maxCellHeight * divisionDirection;
+                            else
+                                vertex.transform.position = (Vector2)origin.transform.position
+                                   + (i + 1) * maxCellWidth * divisionDirection;
+                            */
+                            
+                            // check length of last part
+                            if (((divisionDirection == Vector2.up || divisionDirection == Vector2.down) &&
+                                    (currentEdge.GetLength() < minDistance + maxCellHeight)) ||
+                               ((divisionDirection == Vector2.left || divisionDirection == Vector2.right) &&
+                                    (currentEdge.GetLength() < minDistance + maxCellWidth)))
+                            {
+                                if (currentEdge.GetLength() <= minDistance * 2 + 0.02f) break;
+                                else
+                                {
+                                    vertex = Instantiate(vertexPrefab);
+
+                                    vertex.transform.position = (Vector2)origin.transform.position
+                                        + (currentEdge.GetLength() - minDistance) * divisionDirection;
+                                }
+                            } else
+                            {
+                                vertex = Instantiate(vertexPrefab);
+
+                                if (divisionDirection == Vector2.up || divisionDirection == Vector2.down)
+                                    vertex.transform.position = (Vector2)origin.transform.position
+                                   + (i + 1) * maxCellHeight * divisionDirection;
+                                else
+                                    vertex.transform.position = (Vector2)origin.transform.position
+                                       + (i + 1) * maxCellWidth * divisionDirection;
+                            }
+                            
+                        } else
+                        {
+                            vertex = Instantiate(vertexPrefab);
+
+                            if (divisionDirection == Vector2.up || divisionDirection == Vector2.down)
+                                vertex.transform.position = (Vector2)origin.transform.position
+                               + (i + 1) * maxCellHeight * divisionDirection;
+                            else
+                                vertex.transform.position = (Vector2)origin.transform.position
+                                   + (i + 1) * maxCellWidth * divisionDirection;
+
+                        }
 
 
                         if (reversed)
@@ -274,5 +326,42 @@ public class Generator : MonoBehaviour
         return newVertices;
     }
 
-    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, Completed }
+    public void FindFaces(Vertex origin)
+    {
+        origin.GetComponent<Renderer>().material.color = Color.green;
+        Vertex current = origin;
+        int dirIndex = 0;
+
+        List<Edge> faceEdges = new List<Edge>();
+        List<Vertex> faceVertices = new List<Vertex>();
+
+        for (int i = 0; i < 4; i++)
+        {
+            Edge found = null;
+
+            foreach (Edge e in current.edges)
+            {
+                if (e.GetDirectionFrom(origin) == directions[dirIndex])
+                {
+                    current.GetComponent<Renderer>().material.color = Color.red;
+                    e.GetComponent<Renderer>().material.color = Color.red;
+
+                    faceVertices.Add(current);
+                    faceEdges.Add(e);
+
+                    current = e.GetOtherVertex(current);
+                    found = e;
+
+                    break;
+                }
+            }
+            
+            Debug.Log(found + " " + directions[dirIndex]);
+            dirIndex++;
+        }
+        // find edge on direction
+        Debug.Log(faceEdges.Count);
+    }
+
+    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, FindingFaces, Completed }
 }

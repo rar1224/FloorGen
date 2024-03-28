@@ -88,4 +88,17 @@ public class Edge : MonoBehaviour
     {
         return transform.localScale.x;
     }
+
+    public Vertex GetOtherVertex(Vertex vertex)
+    {
+        if (Vertex1 == vertex) return Vertex2;
+        else if (Vertex2 == vertex) return Vertex1;
+        else return null;
+    }
+
+    public Vector2 GetDirectionFrom(Vertex origin)
+    {
+        if (origin == Vertex1) return Direction;
+        else return -Direction;
+    }
 }
