@@ -3,7 +3,11 @@ guid: c5f1c913dfdff844594230af3958f632
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - envelope: {instanceID: 0}
+  - vertexPrefab: {fileID: 3194413762310587454, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
+  - edgePrefab: {instanceID: 0}
+  - facePrefab: {instanceID: 0}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 

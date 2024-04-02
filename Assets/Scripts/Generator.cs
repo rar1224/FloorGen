@@ -12,6 +12,7 @@ public class Generator : MonoBehaviour
 
     public Vertex vertexPrefab;
     public Edge edgePrefab;
+    public Face facePrefab;
 
     //private List<Face> faces = new List<Face>();
     public List<Vertex> allVertices = new List<Vertex>();
@@ -85,16 +86,26 @@ public class Generator : MonoBehaviour
         {
             
             // dividing rest into smaller cells
-
+            
             if (startLoop.Count != 0)
             {
                 DivideCurrentLoop();
             }
             else status = Status.FindingFaces;
+            
 
         } else if (status == Status.FindingFaces)
         {
-            FindFaces(allVertices[10]);
+            foreach(Vertex v in allVertices)
+            {
+                Face face = FindFace(v);
+                if (face != null) allFaces.Add(face);
+            }
+            
+            status = Status.MakingRooms;
+        } else if (status == Status.MakingRooms)
+        {
+            SetupRooms();
             status = Status.Completed;
         }
     }
@@ -252,18 +263,7 @@ public class Generator : MonoBehaviour
                         Vertex vertex = null;
 
                         if (i == divisions - 1)
-                        {
-                            /*
-                            vertex = Instantiate(vertexPrefab);
-
-                            if (divisionDirection == Vector2.up || divisionDirection == Vector2.down)
-                                vertex.transform.position = (Vector2)origin.transform.position
-                               + (i + 1) * maxCellHeight * divisionDirection;
-                            else
-                                vertex.transform.position = (Vector2)origin.transform.position
-                                   + (i + 1) * maxCellWidth * divisionDirection;
-                            */
-                            
+                        {      
                             // check length of last part
                             if (((divisionDirection == Vector2.up || divisionDirection == Vector2.down) &&
                                     (currentEdge.GetLength() < minDistance + maxCellHeight)) ||
@@ -275,8 +275,16 @@ public class Generator : MonoBehaviour
                                 {
                                     vertex = Instantiate(vertexPrefab);
 
-                                    vertex.transform.position = (Vector2)origin.transform.position
-                                        + (currentEdge.GetLength() - minDistance) * divisionDirection;
+                                    if (divisionDirection == Vector2.up || divisionDirection == Vector2.down)
+                                        vertex.transform.position = (Vector2)origin.transform.position
+                                       + (i + 1) * maxCellHeight * divisionDirection
+                                       - minDistance * divisionDirection;
+                                    else
+                                        vertex.transform.position = (Vector2)origin.transform.position
+                                           + (i + 1) * maxCellWidth * divisionDirection
+                                           - minDistance * divisionDirection;
+
+                                    Debug.Log(vertex.transform.position);
                                 }
                             } else
                             {
@@ -315,6 +323,8 @@ public class Generator : MonoBehaviour
 
                         newEdges.Add(currentEdge);
                         newVertices.Add(vertex);
+
+                        //DivideOnVertex(vertex);
                     }
                 }
             }
@@ -326,14 +336,16 @@ public class Generator : MonoBehaviour
         return newVertices;
     }
 
-    public void FindFaces(Vertex origin)
+    public Face FindFace(Vertex origin)
     {
-        origin.GetComponent<Renderer>().material.color = Color.green;
         Vertex current = origin;
         int dirIndex = 0;
 
         List<Edge> faceEdges = new List<Edge>();
         List<Vertex> faceVertices = new List<Vertex>();
+
+        List<Vector2> directionsList = new List<Vector2>();
+        directionsList.AddRange(directions);
 
         for (int i = 0; i < 4; i++)
         {
@@ -341,11 +353,8 @@ public class Generator : MonoBehaviour
 
             foreach (Edge e in current.edges)
             {
-                if (e.GetDirectionFrom(origin) == directions[dirIndex])
+                if (e.GetDirectionFrom(current) == directionsList[dirIndex])
                 {
-                    current.GetComponent<Renderer>().material.color = Color.red;
-                    e.GetComponent<Renderer>().material.color = Color.red;
-
                     faceVertices.Add(current);
                     faceEdges.Add(e);
 
@@ -355,13 +364,32 @@ public class Generator : MonoBehaviour
                     break;
                 }
             }
-            
-            Debug.Log(found + " " + directions[dirIndex]);
-            dirIndex++;
+
+            if (found == null)
+            {
+                return null;
+
+            } else
+            {
+                dirIndex++;
+            }
         }
-        // find edge on direction
-        Debug.Log(faceEdges.Count);
+
+        Face face = Instantiate(facePrefab);
+        face.vertices = faceVertices;
+        face.SetEdges(faceEdges);
+        face.MakeVisible();
+
+        return face;
     }
 
-    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, FindingFaces, Completed }
+    public void SetupRooms()
+    {
+        Room entrance = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
+        Room livingRoom = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
+        Room bedroom1 = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
+        Room bedroom2 = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
+    }
+
+    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, FindingFaces, MakingRooms, Completed }
 }
