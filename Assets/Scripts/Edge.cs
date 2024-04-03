@@ -96,6 +96,14 @@ public class Edge : MonoBehaviour
         else return null;
     }
 
+    public Face GetOtherFace(Face face)
+    {
+        if (faces.Count < 2) return null;
+        if (faces[0] == face) return faces[1];
+        else if (faces[1] == face) return faces[0];
+        else return null;
+    }
+
     public Vector2 GetDirectionFrom(Vertex origin)
     {
         if (origin == Vertex1) return Direction;

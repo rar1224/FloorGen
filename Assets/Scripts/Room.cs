@@ -8,13 +8,17 @@ public class Room
     public float exteriorPreference;
     public Vector2 preferredDirection;
     public List<Face> faces;
+    public Color color;
 
-    public Room(float rectanglePreference, float exteriorPreference, Vector2 preferredDirection, Face face)
+    public Room(float rectanglePreference, float exteriorPreference, Vector2 preferredDirection, Face face, Color color)
     {
         this.rectanglePreference = rectanglePreference;
         this.exteriorPreference = exteriorPreference;
         this.preferredDirection = preferredDirection;
-        faces = new List<Face>{face};
-        face.GetComponent<Renderer>().material.color = Color.white;
+        faces = new List<Face> { face };
+        face.room = this;
+        
+        this.color = color;
+        face.GetComponent<Renderer>().material.color = color;
     }
 }

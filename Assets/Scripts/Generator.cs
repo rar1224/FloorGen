@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Burst.Intrinsics;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -18,6 +19,7 @@ public class Generator : MonoBehaviour
     public List<Vertex> allVertices = new List<Vertex>();
     public List<Edge> allEdges = new List<Edge>();
     public List<Face> allFaces = new List<Face>();
+    public List<Room> allRooms = new List<Room>();
 
     private bool ran = false;
     private Face start;
@@ -106,6 +108,13 @@ public class Generator : MonoBehaviour
         } else if (status == Status.MakingRooms)
         {
             SetupRooms();
+            int counter = 1;
+
+            while (counter > 0)
+            {
+                counter = ExpandRooms();
+            } 
+
             status = Status.Completed;
         }
     }
@@ -385,11 +394,82 @@ public class Generator : MonoBehaviour
 
     public void SetupRooms()
     {
-        Room entrance = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
-        Room livingRoom = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
-        Room bedroom1 = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
-        Room bedroom2 = new Room(0, 0, Vector2.zero, allFaces[Random.Range(0, allFaces.Count - 1)]);
+        for (int i = 0; i < 4; i++)
+        {
+            Face face = null;
+            while (face == null)
+            {
+                face = allFaces[Random.Range(0, allFaces.Count - 1)];
+                if (face.room == null) break;
+            }
+            Room room = new Room(0, 0, Vector2.zero, face, Random.ColorHSV());
+            allRooms.Add(room);
+        }
+    }
+
+    public int ExpandRooms()
+    {
+        int expanded = 0;
+
+        foreach (Room room in allRooms)
+        {
+            // pick face to extend
+            Face chosen = null;
+            List<Expansion> expansions = new List<Expansion>();
+
+            foreach(Vector2 dir in directions)
+            {
+                expansions.Add(new Expansion(dir, 1));
+            }
+
+            foreach(Expansion exp in expansions)
+            {
+                // pick direction & check if works
+                foreach (Face face in room.faces)
+                {
+                    Edge edge = face.GetEdgeInDirection(exp.direction);
+                    chosen = edge.GetOtherFace(face);
+
+                    // check if the other face is already taken
+                    if (chosen != null && chosen.room != null)
+                    {
+                        chosen = null;
+                        // check another face for expansion
+                        continue;
+                    }
+
+                    edge.GetComponent<Renderer>().material.color = Color.red;
+                    break;
+                }
+
+                // if expansion was valid
+                if (chosen != null) break;
+            }
+
+            // extend
+            if (chosen != null)
+            {
+                room.faces.Add(chosen);
+                chosen.room = room;
+                chosen.Recolor();
+                expanded++;
+            }
+        }
+
+        return expanded;
     }
 
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, FindingFaces, MakingRooms, Completed }
+
+    struct Expansion
+    {
+        public Vector2 direction;
+        public float score;
+
+        public Expansion(Vector2 direction, float score)
+        {
+            this.direction = direction;
+            this.score = score;
+        }
+    }
 }

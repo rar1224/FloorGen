@@ -5,6 +5,7 @@ using UnityEngine;
 public class Face : MonoBehaviour { 
     public List<Edge> edges = new List<Edge>();
     public List<Vertex> vertices = new List<Vertex>();
+    public Room room;
 
     // Start is called before the first frame update
     void Start()
@@ -33,7 +34,7 @@ public class Face : MonoBehaviour {
 
         transform.position = position / 4;
         transform.localScale = new Vector3 (scaleX, scaleY, 0);
-        this.GetComponent<Renderer>().material.color = Random.ColorHSV();
+        this.GetComponent<Renderer>().material.color = Color.black;
 
     }
 
@@ -51,4 +52,19 @@ public class Face : MonoBehaviour {
     {
         return transform.localScale.x * transform.localScale.y;
     }
+
+    public Edge GetEdgeInDirection(Vector3 direction)
+    {
+        foreach(Edge edge in edges)
+        {
+            if ((edge.transform.position - transform.position).normalized == direction) return edge;
+        }
+        return null;
+    }
+
+    public void Recolor()
+    {
+        GetComponent<Renderer>().material.color = room.color;
+    }
+
 }
