@@ -27,4 +27,16 @@ public class Vertex : MonoBehaviour
 
         return false;
     }
+
+    public Edge FindNextExternalEdge(Edge edge)
+    {
+        foreach(Edge e in edges)
+        {
+            if (e.IsExterior)
+            {
+                if(e != edge) return e;
+            }
+        }
+        return null;
+    }
 }

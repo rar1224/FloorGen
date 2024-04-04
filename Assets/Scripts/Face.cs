@@ -62,9 +62,19 @@ public class Face : MonoBehaviour {
         return null;
     }
 
+    // Debug
     public void Recolor()
     {
         GetComponent<Renderer>().material.color = room.color;
+    }
+
+    public bool IsExteriorAdjacent()
+    {
+        foreach (Edge edge in edges)
+        {
+            if (edge.IsExterior == true) return true;
+        }
+        return false;
     }
 
 }

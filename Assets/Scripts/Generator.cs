@@ -1,10 +1,13 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml;
 using Unity.Burst.Intrinsics;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UIElements;
+using Random = UnityEngine.Random;
 
 public class Generator : MonoBehaviour
 {
@@ -14,15 +17,14 @@ public class Generator : MonoBehaviour
     public Vertex vertexPrefab;
     public Edge edgePrefab;
     public Face facePrefab;
+    public GameObject windowPrefab;
 
     //private List<Face> faces = new List<Face>();
     public List<Vertex> allVertices = new List<Vertex>();
     public List<Edge> allEdges = new List<Edge>();
     public List<Face> allFaces = new List<Face>();
     public List<Room> allRooms = new List<Room>();
-
-    private bool ran = false;
-    private Face start;
+    public List<ExternalWall> allWalls = new List<ExternalWall>();
 
     private List<Vertex> startLoop = new List<Vertex>();
     private List<Vertex> nextLoop = new List<Vertex>();
@@ -72,7 +74,7 @@ public class Generator : MonoBehaviour
             {
                 DivideCurrentLoop();
             }
-            else status = Status.DividingEnvelopeIntoCells;
+            else status++;
 
         } else if (status == Status.DividingEnvelopeIntoCells)
         {
@@ -80,7 +82,7 @@ public class Generator : MonoBehaviour
             
             
             startLoop = DivideToCells(2, 1, true, true);
-            status = Status.DividingAllIntoCells;
+            status++;
             return;
             
 
@@ -93,7 +95,7 @@ public class Generator : MonoBehaviour
             {
                 DivideCurrentLoop();
             }
-            else status = Status.FindingFaces;
+            else status++;
             
 
         } else if (status == Status.FindingFaces)
@@ -103,20 +105,33 @@ public class Generator : MonoBehaviour
                 Face face = FindFace(v);
                 if (face != null) allFaces.Add(face);
             }
-            
-            status = Status.MakingRooms;
-        } else if (status == Status.MakingRooms)
+
+            FindWalls();
+
+            status++;
+        }
+        else if (status == Status.PlacingObjects)
         {
+            // placing windows and doors
+            PlaceWindows(4, 1, 0.5f);
+            status++;
+        }
+
+        else if (status == Status.MakingRooms)
+        {
+            /*
+            // dividing space into rooms;
             SetupRooms();
             int counter = 1;
-
+            
             while (counter > 0)
             {
                 counter = ExpandRooms();
-            } 
+            }
+            */
+            status++;
 
-            status = Status.Completed;
-        }
+        } 
     }
 
     public void DivideCurrentLoop()
@@ -392,6 +407,97 @@ public class Generator : MonoBehaviour
         return face;
     }
 
+    public void FindWalls()
+    {
+        Edge current = allEdges[0];
+        Vertex origin = current.Vertex1;
+        Vertex next = current.Vertex2;
+
+        List<ExternalWall> walls = new List<ExternalWall>();
+        
+        ExternalWall wall = new ExternalWall();
+        ExternalWall currentWall = wall;
+
+        while (next != origin)
+        {
+            // is it aligned with current wall
+            if (currentWall.IsAligned(current))
+            {
+                currentWall.edges.Add(current);
+            } else
+            {
+                walls.Add(currentWall);
+                currentWall.Calculate();
+
+                currentWall = new ExternalWall();
+                currentWall.edges.Add(current);
+            }
+            current.GetComponent<Renderer>().material.color = Color.blue;
+            current = next.FindNextExternalEdge(current);
+            next = current.GetOtherVertex(next);
+        }
+
+        currentWall.edges.Add(current);
+        walls.Add(currentWall);
+        currentWall.Calculate();
+
+        current.GetComponent<Renderer>().material.color = Color.blue;
+
+        allWalls = walls;
+    }
+
+    public void PlaceWindows(int number, float width, float gap)
+    {
+        // directions and numbers of windows that can be placed on each
+        // all walls for each direction (north, south...) counted together
+
+        ExternalDirection[] externalDirections = new ExternalDirection[4];
+
+        for (int i = 0; i < 4; i++)
+        {
+            List<ExternalWall> possibleWalls = new List<ExternalWall>();
+            int possibleNumber = 0;
+
+            foreach (ExternalWall wall in allWalls)
+            {
+                if (wall.Orientation == directions[i]) possibleWalls.Add(wall);
+            }
+
+            possibleWalls.Sort();
+
+            foreach (ExternalWall wall in possibleWalls)
+            {
+                int windowsNumber = (int)((wall.Length - gap) / (width + gap));
+                possibleNumber += windowsNumber;
+            }
+
+            externalDirections[i] = new ExternalDirection(directions[i], possibleWalls, possibleNumber, 1);
+        }
+
+        // for each direction, place appropriate number of windows
+
+        foreach(ExternalDirection ext in externalDirections)
+        {
+            foreach (ExternalWall wall in ext.possibleWalls)
+            {
+                int windowsNumber = (int)((wall.Length - gap) / (width + gap));
+                float correctGap = (wall.Length - windowsNumber * width) / (windowsNumber + 1);
+
+                Debug.Log(ext.direction + " " + windowsNumber);
+
+                for (int i = 0; i < windowsNumber; i++)
+                {
+                    Edge origin = wall.edges[0];
+                    GameObject window = Instantiate(windowPrefab);
+                    window.transform.position = origin.Vertex1.transform.position
+                        + (Vector3)origin.Direction * ((i + 1) * correctGap + (i + 0.5f) * width);
+                    window.transform.localScale.Set(width, 0.2f, 1);
+                    window.transform.rotation = origin.transform.rotation;
+                }
+            }
+        }
+    }
+
     public void SetupRooms()
     {
         for (int i = 0; i < 4; i++)
@@ -399,7 +505,7 @@ public class Generator : MonoBehaviour
             Face face = null;
             while (face == null)
             {
-                face = allFaces[Random.Range(0, allFaces.Count - 1)];
+                face = allFaces[Random.Range(0, allFaces.Count)];
                 if (face.room == null) break;
             }
             Room room = new Room(0, 0, Vector2.zero, face, Random.ColorHSV());
@@ -413,63 +519,112 @@ public class Generator : MonoBehaviour
 
         foreach (Room room in allRooms)
         {
-            // pick face to extend
-            Face chosen = null;
-            List<Expansion> expansions = new List<Expansion>();
-
-            foreach(Vector2 dir in directions)
-            {
-                expansions.Add(new Expansion(dir, 1));
-            }
-
-            foreach(Expansion exp in expansions)
-            {
-                // pick direction & check if works
-                foreach (Face face in room.faces)
-                {
-                    Edge edge = face.GetEdgeInDirection(exp.direction);
-                    chosen = edge.GetOtherFace(face);
-
-                    // check if the other face is already taken
-                    if (chosen != null && chosen.room != null)
-                    {
-                        chosen = null;
-                        // check another face for expansion
-                        continue;
-                    }
-
-                    edge.GetComponent<Renderer>().material.color = Color.red;
-                    break;
-                }
-
-                // if expansion was valid
-                if (chosen != null) break;
-            }
-
-            // extend
-            if (chosen != null)
-            {
-                room.faces.Add(chosen);
-                chosen.room = room;
-                chosen.Recolor();
-                expanded++;
-            }
+            if(ExpandRoom(room)) expanded++;
         }
 
         return expanded;
     }
 
-    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, FindingFaces, MakingRooms, Completed }
-
-    struct Expansion
+    public bool ExpandRoom(Room room)
     {
-        public Vector2 direction;
+        // generate a list of possible expansions for all faces
+        List<Expansion> expansions = new List<Expansion>();
+
+        foreach (Face face in room.faces)
+        {
+            foreach (Vector2 dir in directions)
+            {
+                float score = 0.5f;
+
+                // check if valid
+                Edge edge = face.GetEdgeInDirection(dir);
+                Face otherFace = edge.GetOtherFace(face);
+
+                if (otherFace == null || otherFace.room != null) continue;
+                else
+                {
+                    // if expansion already in list, add to its score
+                    bool onList = false;
+
+                    foreach (Expansion exp in expansions)
+                    {
+                        if (exp.nextFace == otherFace)
+                        {
+                            exp.AddScore(1);
+                            onList = true;
+                        }
+                    }
+
+                    if (!onList)
+                    {
+                        Expansion exp = new Expansion(otherFace, 0.5f);
+                        if (otherFace.IsExteriorAdjacent()) exp.AddScore(1);
+
+                        expansions.Add(exp);
+                    }
+                }
+            }
+        }
+
+        // sort by score
+        expansions.Sort();
+
+        // extend
+        if (expansions.Count != 0)
+        {
+            Face chosen = expansions[0].nextFace;
+            room.faces.Add(chosen);
+            chosen.room = room;
+            chosen.Recolor();
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, FindingFaces, PlacingObjects, MakingRooms, Completed }
+
+    public struct Expansion : IComparable<Expansion>
+    {
+        public Face nextFace;
         public float score;
 
-        public Expansion(Vector2 direction, float score)
+        public Expansion(Face nextFace, float score)
+        {
+            this.nextFace = nextFace;
+            this.score = score;
+        }
+
+        public int CompareTo(Expansion other)
+        {
+            if (other.score < score) return -1;
+            else if (other.score > score) return 1;
+            else return 0;
+        }
+
+        public void AddScore(float score)
+        {
+            this.score += score;
+        }
+    }
+
+    public struct ExternalDirection
+    {
+        public Vector2 direction;
+        public List<ExternalWall> possibleWalls;
+        public int possibleNumber;
+        public float preference;
+        public int setNumber;
+
+        public ExternalDirection(Vector2 direction, List<ExternalWall> possibleWalls, int possibleNumber, float preference)
         {
             this.direction = direction;
-            this.score = score;
+            this.possibleWalls = possibleWalls;
+            this.possibleNumber = possibleNumber;
+            this.preference = preference;
+            setNumber = 0;
         }
     }
 }

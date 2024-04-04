@@ -109,4 +109,10 @@ public class Edge : MonoBehaviour
         if (origin == Vertex1) return Direction;
         else return -Direction;
     }
+
+    //Debug
+    public void Recolor(Color color)
+    {
+        GetComponent<Renderer>().material.color = color;
+    }
 }
