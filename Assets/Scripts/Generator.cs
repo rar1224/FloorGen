@@ -118,12 +118,22 @@ public class Generator : MonoBehaviour
 
             PlaceFrontDoor(directions[0], 2f, 1, 0.5f);
             PlaceWindows(6, 1, 0.5f);
+
+            status++;
+        }
+        else if (status == Status.ConnectingSharingCells)
+        {
+            foreach (ExternalWall wall in allWalls)
+            {
+                wall.ConnectSharingCells();
+            }
+
             status++;
         }
 
         else if (status == Status.MakingRooms)
         {
-            /*
+            
             // dividing space into rooms;
             SetupRooms();
             int counter = 1;
@@ -132,7 +142,7 @@ public class Generator : MonoBehaviour
             {
                 counter = ExpandRooms();
             }
-            */
+            
             status++;
 
         } 
@@ -596,7 +606,7 @@ public class Generator : MonoBehaviour
 
                     foreach (Expansion exp in expansions)
                     {
-                        if (exp.nextFace == otherFace)
+                        if (exp.nextFace == otherFace || exp.nextFace.IsConnectedTo(otherFace))
                         {
                             exp.AddScore(1);
                             onList = true;
@@ -620,10 +630,7 @@ public class Generator : MonoBehaviour
         // extend
         if (expansions.Count != 0)
         {
-            Face chosen = expansions[0].nextFace;
-            room.faces.Add(chosen);
-            chosen.room = room;
-            chosen.Recolor();
+            expansions[0].nextFace.SetRoom(room);
             return true;
         }
         else
@@ -632,7 +639,8 @@ public class Generator : MonoBehaviour
         }
     }
 
-    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells, FindingFaces, PlacingObjects, MakingRooms, Completed }
+    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
+        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, Completed }
 
     public struct Expansion : IComparable<Expansion>
     {

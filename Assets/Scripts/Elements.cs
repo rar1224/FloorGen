@@ -130,6 +130,43 @@ public class ExternalWall : IComparable<ExternalWall>
         }
     }
 
+    // connect faces that share a window or door
+    public void ConnectSharingCells()
+    {
+        foreach (GameObject obj in objects)
+        {
+            List<Face> faces = new List<Face>();
+            List<Collider2D> colliders = new List<Collider2D>();
+
+            Physics2D.OverlapCollider(obj.GetComponent<Collider2D>(), new ContactFilter2D().NoFilter(), colliders);
+
+            // check which edges overlap with the window/door
+            foreach(Collider2D collider in colliders)
+            {
+                if (collider.gameObject.tag == "Edge")
+                {
+                    Edge edge = collider.gameObject.GetComponent<Edge>();
+                    if (edges.Contains(edge))
+                    {
+                        faces.Add(edge.faces[0]);
+                    }
+                }
+            }
+
+            foreach(Face face in faces)
+            {
+                // Debug
+
+                foreach(Face other in faces)
+                {
+                    if (face == other) break;
+                    if (obj.tag == "Window") face.ConnectToFace(other);
+                    else face.ConnectToFace(other, true);
+                }
+            }
+        }
+    }
+
 }
 
 
