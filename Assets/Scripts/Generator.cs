@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Xml;
 using Unity.Burst.Intrinsics;
@@ -18,6 +19,7 @@ public class Generator : MonoBehaviour
     public Edge edgePrefab;
     public Face facePrefab;
     public GameObject windowPrefab;
+    public GameObject doorPrefab;
 
     //private List<Face> faces = new List<Face>();
     public List<Vertex> allVertices = new List<Vertex>();
@@ -106,14 +108,16 @@ public class Generator : MonoBehaviour
                 if (face != null) allFaces.Add(face);
             }
 
-            FindWalls();
+            FindWalls(1, 0.5f);
 
             status++;
         }
         else if (status == Status.PlacingObjects)
         {
             // placing windows and doors
-            PlaceWindows(4, 1, 0.5f);
+
+            PlaceFrontDoor(directions[0], 2f, 1, 0.5f);
+            PlaceWindows(6, 1, 0.5f);
             status++;
         }
 
@@ -308,7 +312,7 @@ public class Generator : MonoBehaviour
                                            + (i + 1) * maxCellWidth * divisionDirection
                                            - minDistance * divisionDirection;
 
-                                    Debug.Log(vertex.transform.position);
+                                    UnityEngine.Debug.Log(vertex.transform.position);
                                 }
                             } else
                             {
@@ -407,7 +411,7 @@ public class Generator : MonoBehaviour
         return face;
     }
 
-    public void FindWalls()
+    public void FindWalls(float windowWidth, float gap)
     {
         Edge current = allEdges[0];
         Vertex origin = current.Vertex1;
@@ -427,7 +431,7 @@ public class Generator : MonoBehaviour
             } else
             {
                 walls.Add(currentWall);
-                currentWall.Calculate();
+                currentWall.Calculate(windowWidth, gap);
 
                 currentWall = new ExternalWall();
                 currentWall.edges.Add(current);
@@ -439,11 +443,28 @@ public class Generator : MonoBehaviour
 
         currentWall.edges.Add(current);
         walls.Add(currentWall);
-        currentWall.Calculate();
+        currentWall.Calculate(windowWidth, gap);
 
         current.GetComponent<Renderer>().material.color = Color.blue;
 
         allWalls = walls;
+    }
+
+    public void PlaceFrontDoor(Vector2 direction, float doorWidth, float windowWidth, float gap)
+    {
+        // pick longest wall on correct side of building
+        List<ExternalWall> possibleWalls = new List<ExternalWall>();
+
+        foreach(ExternalWall ext in allWalls)
+        {
+            if (ext.Orientation == direction) possibleWalls.Add(ext);
+        }
+
+        possibleWalls.Sort();
+        ExternalWall wall = possibleWalls[0];
+
+        // place door
+        wall.SetupDoor(doorWidth, windowWidth, gap, doorPrefab);
     }
 
     public void PlaceWindows(int number, float width, float gap)
@@ -451,7 +472,8 @@ public class Generator : MonoBehaviour
         // directions and numbers of windows that can be placed on each
         // all walls for each direction (north, south...) counted together
 
-        ExternalDirection[] externalDirections = new ExternalDirection[4];
+        List<ExternalDirection> externalDirections = new List<ExternalDirection>();
+        float maxRange = 0;
 
         for (int i = 0; i < 4; i++)
         {
@@ -471,28 +493,56 @@ public class Generator : MonoBehaviour
                 possibleNumber += windowsNumber;
             }
 
-            externalDirections[i] = new ExternalDirection(directions[i], possibleWalls, possibleNumber, 1);
+            ExternalDirection ext = new ExternalDirection(directions[i], possibleWalls, possibleNumber, 1);
+            externalDirections.Add(ext);
+            maxRange += ext.preference;
         }
+
+
+        // calculate how many windows should be placed on each wall direction
+        externalDirections.Sort();
+        
+
+        for(int i = 0; i < number; i++)
+        {
+            ExternalDirection chosen = null;
+            float rand = Random.Range(0, maxRange);
+
+            foreach (ExternalDirection ext in externalDirections)
+            {
+                if (ext.preference > rand) { chosen = ext; break; }
+                else rand -= ext.preference;
+            }
+
+            if (chosen.setNumber < chosen.possibleNumber) chosen.setNumber++;
+            else i--;
+        }
+
+        externalDirections.Sort();
+        
 
         // for each direction, place appropriate number of windows
 
         foreach(ExternalDirection ext in externalDirections)
         {
+            // divide set number of windows amongst all external walls on this side of building
+
+            for (int i = 0; i < ext.setNumber; i++)
+            {
+                foreach(ExternalWall wall in ext.possibleWalls)
+                {
+                    if (wall.windowsNumber < wall.MaxWindowsNumber) { wall.windowsNumber++; break; }
+                }
+            }
+
+            // setup windows
+
             foreach (ExternalWall wall in ext.possibleWalls)
             {
-                int windowsNumber = (int)((wall.Length - gap) / (width + gap));
-                float correctGap = (wall.Length - windowsNumber * width) / (windowsNumber + 1);
-
-                Debug.Log(ext.direction + " " + windowsNumber);
-
-                for (int i = 0; i < windowsNumber; i++)
-                {
-                    Edge origin = wall.edges[0];
-                    GameObject window = Instantiate(windowPrefab);
-                    window.transform.position = origin.Vertex1.transform.position
-                        + (Vector3)origin.Direction * ((i + 1) * correctGap + (i + 0.5f) * width);
-                    window.transform.localScale.Set(width, 0.2f, 1);
-                    window.transform.rotation = origin.transform.rotation;
+                if (wall.windowsNumber == 0) continue;
+                else {
+                    wall.SetupWindows(width, windowPrefab);
+                    wall.SetupAll();
                 }
             }
         }
@@ -534,8 +584,6 @@ public class Generator : MonoBehaviour
         {
             foreach (Vector2 dir in directions)
             {
-                float score = 0.5f;
-
                 // check if valid
                 Edge edge = face.GetEdgeInDirection(dir);
                 Face otherFace = edge.GetOtherFace(face);
@@ -610,21 +658,30 @@ public class Generator : MonoBehaviour
         }
     }
 
-    public struct ExternalDirection
+    public class ExternalDirection : IComparable<ExternalDirection>
     {
         public Vector2 direction;
         public List<ExternalWall> possibleWalls;
         public int possibleNumber;
+        public float weight;
         public float preference;
         public int setNumber;
 
-        public ExternalDirection(Vector2 direction, List<ExternalWall> possibleWalls, int possibleNumber, float preference)
+        public ExternalDirection(Vector2 direction, List<ExternalWall> possibleWalls, int possibleNumber, float weight)
         {
             this.direction = direction;
             this.possibleWalls = possibleWalls;
             this.possibleNumber = possibleNumber;
-            this.preference = preference;
+            this.weight = weight;
+            preference = weight * possibleNumber;
             setNumber = 0;
+        }
+
+        public int CompareTo(ExternalDirection other)
+        {
+            if (other.preference > preference) return -1;
+            else if (other.preference < preference) return 1;
+            else return 0;
         }
     }
 }

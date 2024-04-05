@@ -176,6 +176,8 @@ MonoBehaviour:
   vertexPrefab: {fileID: 3194413762310587454, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
   edgePrefab: {fileID: 3644132911681782224, guid: 63648faf967a1bb47881a8640e4af162, type: 3}
   facePrefab: {fileID: 7448322844994711194, guid: 15c10325c7a98fc4db196e1fd4af0f07, type: 3}
+  windowPrefab: {fileID: 6821213665842543422, guid: 3f278f63da14d264b85bf9819a138ff6, type: 3}
+  doorPrefab: {fileID: 6830463102735971696, guid: 9c2ab3eda8803a04a8b7673d3be5a3ba, type: 3}
   allVertices: []
   allEdges: []
   allFaces: []
@@ -297,11 +299,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -2
+      value: 2.76
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 4
+      value: 4.35
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.z
@@ -588,7 +590,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 4
+      value: 4.35
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.z
@@ -771,7 +773,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -2
+      value: 2.76
       objectReference: {fileID: 0}
     - target: {fileID: 741899017807684587, guid: 30ab86a77b7ac4248811a23309b65084, type: 3}
       propertyPath: m_LocalPosition.y

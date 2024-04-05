@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Edge
   - Vertex
+  - Object
   layers:
   - Default
   - TransparentFX
@@ -45,4 +46,7 @@ TagManager:
     locked: 0
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: Objects
+    uniqueID: 917814447
     locked: 0
