@@ -78,31 +78,34 @@ public class Generator : MonoBehaviour
             }
             else status++;
 
-        } else if (status == Status.DividingEnvelopeIntoCells)
+        }
+        else if (status == Status.DividingEnvelopeIntoCells)
         {
             // dividing envelope into smaller cells
-            
-            
+
+
             startLoop = DivideToCells(2, 1, true, true);
             status++;
             return;
-            
 
-        } else if (status == Status.DividingAllIntoCells)
+
+        }
+        else if (status == Status.DividingAllIntoCells)
         {
-            
+
             // dividing rest into smaller cells
-            
+
             if (startLoop.Count != 0)
             {
                 DivideCurrentLoop();
             }
             else status++;
-            
 
-        } else if (status == Status.FindingFaces)
+
+        }
+        else if (status == Status.FindingFaces)
         {
-            foreach(Vertex v in allVertices)
+            foreach (Vertex v in allVertices)
             {
                 Face face = FindFace(v);
                 if (face != null) allFaces.Add(face);
@@ -133,17 +136,15 @@ public class Generator : MonoBehaviour
 
         else if (status == Status.MakingRooms)
         {
+            SetupRooms();
+            status++;
+        }
+        else if (status == Status.ExpandingRooms) { 
             
             // dividing space into rooms;
-            SetupRooms();
-            int counter = 1;
-            
-            while (counter > 0)
-            {
-                counter = ExpandRooms();
-            }
-            
-            status++;
+            int counter = ExpandRooms();
+
+            if (counter == 0) status++;
 
         } 
     }
@@ -560,17 +561,32 @@ public class Generator : MonoBehaviour
 
     public void SetupRooms()
     {
-        for (int i = 0; i < 4; i++)
+        List<Face> exteriorFaces = new List<Face>();
+
+        foreach (Face face in allFaces)
         {
+            if (face.IsExteriorAdjacent()) exteriorFaces.Add(face);
+        }
+
+        for (int i = 0; i < 5; i++)
+        {
+
             Face face = null;
             while (face == null)
             {
-                face = allFaces[Random.Range(0, allFaces.Count)];
+                face = exteriorFaces[Random.Range(0, exteriorFaces.Count)];
                 if (face.room == null) break;
             }
-            Room room = new Room(0, 0, Vector2.zero, face, Random.ColorHSV());
+
+            Room room = new Room(1, Vector2.zero, 2, true, face, Random.ColorHSV());
             allRooms.Add(room);
         }
+            /*
+            Face face = allFaces[0];
+            Room room = new Room(1, Vector2.zero, 5, true, face, Random.ColorHSV());
+            allRooms.Add(room);
+            */
+        //}
     }
 
     public int ExpandRooms()
@@ -579,14 +595,86 @@ public class Generator : MonoBehaviour
 
         foreach (Room room in allRooms)
         {
-            if(ExpandRoom(room)) expanded++;
+            if(ExpandRoomRectangular(room)) expanded++;
         }
 
         return expanded;
     }
 
+    public bool ExpandRoomRectangular(Room room)
+    {
+        if (room.finished) return false;
+        List<Expansion> expansions = new List<Expansion>();
+
+        foreach (Vector2 dir in directions)
+        {
+            foreach (Face face in room.faces)
+            {
+                // check if valid
+                Edge edge = face.GetEdgeInDirection(dir);
+                Face otherFace = edge.GetOtherFace(face);
+                if (otherFace == null || otherFace.room != null) continue;
+
+                bool onList = false;
+                bool foundParallel = false;
+                Expansion found = null;
+
+                foreach (Expansion exp in expansions)
+                {
+                    // check if expansion already on the list
+                    if (exp.nextFace != null && exp.nextFace == otherFace) { onList = true; found = exp; break; }
+                    else if (exp.multipleFaces != null && exp.multipleFaces.Contains(otherFace)) { onList = true; found = exp; break; }
+
+                    // check if expansion contains parallel cells
+                    if (exp.nextFace != null && exp.nextFace.IsParallelTo(otherFace, dir)) { foundParallel = true; found = exp; break; }
+                    else if (exp.multipleFaces != null && exp.multipleFaces.Contains(otherFace)) { foundParallel = true; found = exp; break; }
+                }
+
+                if (onList)
+                {
+                    found.AddScore(2);
+                }
+                else if (foundParallel)
+                {
+                    found.AddToList(otherFace);
+                    found.AddScore(1);
+                }
+                else
+                {
+                    Expansion exp = new Expansion(otherFace, 0.5f);
+                    expansions.Add(exp);
+                }
+            }
+        }
+
+        // sort by score
+        expansions.Sort();
+
+        // extend
+        if (expansions.Count != 0)
+        {
+            if (expansions[0].nextFace != null)
+            {
+                expansions[0].nextFace.SetRoom(room);
+                return true;
+            }
+            else
+            {
+                foreach (Face face in expansions[0].multipleFaces)
+                {
+                    face.SetRoom(room);
+                }
+                return true;
+            }
+        }
+        else
+        {
+            return false;
+        }
+    }
     public bool ExpandRoom(Room room)
     {
+        if (room.finished) return false;
         // generate a list of possible expansions for all faces
         List<Expansion> expansions = new List<Expansion>();
 
@@ -601,12 +689,13 @@ public class Generator : MonoBehaviour
                 if (otherFace == null || otherFace.room != null) continue;
                 else
                 {
-                    // if expansion already in list, add to its score
                     bool onList = false;
+                    // check if any expansions fill into a rectangle
 
+                    // if expansion already in list, add to its score
                     foreach (Expansion exp in expansions)
                     {
-                        if (exp.nextFace == otherFace || exp.nextFace.IsConnectedTo(otherFace))
+                        if (exp.nextFace == otherFace || exp.nextFace.IsConnectedTo(otherFace) || otherFace.IsConnectedTo(exp.nextFace))
                         {
                             exp.AddScore(1);
                             onList = true;
@@ -640,16 +729,24 @@ public class Generator : MonoBehaviour
     }
 
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
-        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, Completed }
+        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, Completed }
 
-    public struct Expansion : IComparable<Expansion>
+    public class Expansion : IComparable<Expansion>
     {
         public Face nextFace;
         public float score;
 
+        public List<Face> multipleFaces;
+
         public Expansion(Face nextFace, float score)
         {
             this.nextFace = nextFace;
+            this.score = score;
+        }
+
+        public Expansion(List<Face> multipleFaces, float score)
+        {
+            this.multipleFaces = multipleFaces;
             this.score = score;
         }
 
@@ -663,6 +760,16 @@ public class Generator : MonoBehaviour
         public void AddScore(float score)
         {
             this.score += score;
+        }
+
+        public void AddToList(Face face)
+        {
+            if (multipleFaces != null) multipleFaces.Add(face);
+            else
+            {
+                multipleFaces = new List<Face>{nextFace, face};
+                nextFace = null;
+            }
         }
     }
 

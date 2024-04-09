@@ -1,27 +1,70 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor.PackageManager.UI;
 using UnityEngine;
 using static UnityEngine.UI.Image;
 
 public class Room
 {
-    public float rectanglePreference;
     public float exteriorPreference;
     public Vector2 preferredDirection;
-    public List<Face> faces;
+    public float minArea;
+    public bool preferRectangular;
     public Color color;
 
-    public Room(float rectanglePreference, float exteriorPreference, Vector2 preferredDirection, Face face, Color color)
+    public bool passedMinArea = false;
+    public bool isRectangular = false;
+    public bool finished = false;
+
+    public List<Face> faces;
+    private float currentArea = 0;
+
+    public Room(float exteriorPreference, Vector2 preferredDirection, float minArea, bool preferRectangular, Face face, Color color)
     {
-        this.rectanglePreference = rectanglePreference;
         this.exteriorPreference = exteriorPreference;
         this.preferredDirection = preferredDirection;
-        faces = new List<Face> { face };
-        face.room = this;
+        this.minArea = minArea;
+        this.preferRectangular = preferRectangular;
+
+        faces = new List<Face>();
+        face.SetRoom(this);
         
         this.color = color;
         face.GetComponent<Renderer>().material.color = color;
+    }
+
+    public void AddFace(Face face)
+    {
+        faces.Add(face);
+        face.room = this;
+        face.Recolor();
+        currentArea += face.GetArea();
+
+        if (currentArea >= minArea) passedMinArea = true;
+        if (preferRectangular) isRectangular = IsRectangular();
+        if (isRectangular && passedMinArea) finished = true;
+    }
+
+    public bool IsRectangular()
+    {
+        // check rows
+        Dictionary<float, int> rows = new Dictionary<float, int>();
+        Dictionary<float, int> columns = new Dictionary<float, int>();
+
+        foreach (Face face in faces)
+        {
+            if (rows.ContainsKey(face.transform.position.y)) rows[face.transform.position.y]++;
+            else rows.Add(face.transform.position.y, 1);
+
+            if (columns.ContainsKey(face.transform.position.x)) columns[face.transform.position.x]++;
+            else columns.Add(face.transform.position.x, 1);
+        }
+
+        for(int i = 0; i < rows.Count - 1; i++) { if (rows.ElementAt(i).Value != rows.ElementAt(i + 1).Value) return false; }
+        for (int i = 0; i < columns.Count - 1; i++) { if (columns.ElementAt(i).Value != columns.ElementAt(i + 1).Value) return false; }
+
+        return true;
     }
 }
 

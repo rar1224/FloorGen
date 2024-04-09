@@ -6,7 +6,8 @@ TagManager:
   tags:
   - Edge
   - Vertex
-  - Object
+  - Door
+  - Window
   layers:
   - Default
   - TransparentFX

@@ -103,16 +103,31 @@ public class Face : MonoBehaviour {
 
     public void SetRoom(Room room)
     {
-        room.faces.Add(this);
-        this.room = room;
-        Recolor();
+        room.AddFace(this);
 
         foreach (Face face in connectedFaces)
         {
-            room.faces.Add(face);
-            face.room = room;
-            face.Recolor();
+            room.AddFace(face);
         }
+    }
+
+    public bool IsAdjacentTo(Face face)
+    {
+        if (face == null) return false;
+
+        foreach(Edge edge in edges)
+        {
+            if (edge.faces.Contains(face)) return true;
+        }
+
+        return false;
+    }
+
+    public bool IsParallelTo(Face face, Vector2 direction)
+    {
+        if (direction.x == 0 && transform.position.x == face.transform.position.x) return true;
+        else if (direction.y == 0 && transform.position.y == face.transform.position.y) return true;
+        else return false;
     }
 
 }
