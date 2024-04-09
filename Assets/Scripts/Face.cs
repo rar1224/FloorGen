@@ -96,6 +96,17 @@ public class Face : MonoBehaviour {
         
     }
 
+    public Face GetNextFace(Vector2 direction)
+    {
+        Edge edge = GetEdgeInDirection(direction);
+        Face otherFace = edge.GetOtherFace(this);
+        if (!edge.IsExterior && otherFace.room == null)
+        {
+            return otherFace;
+        }
+        else return null;
+    }
+
     public bool IsConnectedTo(Face face)
     {
         return connectedFaces.Contains(face);

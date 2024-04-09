@@ -579,6 +579,12 @@ public class Generator : MonoBehaviour
             }
 
             Room room = new Room(1, Vector2.zero, 2, true, face, Random.ColorHSV());
+            
+            foreach(Face connected in room.faces[0].connectedFaces)
+            {
+                connected.SetRoom(room);
+            }
+
             allRooms.Add(room);
         }
             /*
@@ -595,10 +601,61 @@ public class Generator : MonoBehaviour
 
         foreach (Room room in allRooms)
         {
-            if(ExpandRoomRectangular(room)) expanded++;
+            if(ExpandRoomSideways(room)) expanded++;
         }
 
         return expanded;
+    }
+
+    public bool ExpandRoomSideways(Room room)
+    {
+        //if (room.finished) return false;
+        List<Expansion> expansions = new List<Expansion>();
+
+        // one expansion in each direction
+        foreach(Vector2 dir in directions)
+        {
+            List<Face> nextFaces = new List<Face>();
+
+            foreach(Face face in room.faces)
+            {
+                // check if valid
+                Face nextFace = face.GetNextFace(dir);
+                if (nextFace != null) nextFaces.Add(nextFace);
+
+                // add also all the connected faces
+                if (face.connectedFaces.Count  > 0)
+                {
+                    foreach(Face face2 in face.connectedFaces)
+                    {
+                        Face nextFace2 = face2.GetNextFace(dir);
+                        if (nextFace2 != null) nextFaces.Add(nextFace2);
+                    }
+                }
+            }
+
+            if (nextFaces.Count > 0)
+            {
+                Expansion exp = new Expansion(nextFaces, nextFaces.Count);
+                expansions.Add(exp);
+            }
+        }
+
+        expansions.Sort();
+
+        // extend
+        if (expansions.Count > 0)
+        {
+            foreach (Face face in expansions[0].multipleFaces)
+                {
+                    face.SetRoom(room);
+                }
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     public bool ExpandRoomRectangular(Room room)
