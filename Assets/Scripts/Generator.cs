@@ -84,7 +84,7 @@ public class Generator : MonoBehaviour
             // dividing envelope into smaller cells
 
 
-            startLoop = DivideToCells(2, 1, true, true);
+            startLoop = DivideToCells(2, 2, true, true);
             status++;
             return;
 
@@ -139,13 +139,16 @@ public class Generator : MonoBehaviour
             SetupRooms();
             status++;
         }
-        else if (status == Status.ExpandingRooms) { 
-            
+        else if (status == Status.ExpandingRooms) {
+
+            //Application.targetFrameRate = 1;
             // dividing space into rooms;
+
+            
             int counter = ExpandRooms();
 
             if (counter == 0) status++;
-
+            
         } 
     }
 
@@ -576,15 +579,12 @@ public class Generator : MonoBehaviour
             {
                 face = exteriorFaces[Random.Range(0, exteriorFaces.Count)];
                 if (face.room == null) break;
+                else face = null;
             }
 
-            Room room = new Room(1, Vector2.zero, 2, true, face, Random.ColorHSV());
-            
-            foreach(Face connected in room.faces[0].connectedFaces)
-            {
-                connected.SetRoom(room);
-            }
+            Room room = new Room(1000, true, face, Random.ColorHSV());
 
+            UnityEngine.Debug.Log("room face " + face.transform.position);
             allRooms.Add(room);
         }
             /*
@@ -609,34 +609,92 @@ public class Generator : MonoBehaviour
 
     public bool ExpandRoomSideways(Room room)
     {
-        //if (room.finished) return false;
+        if (room.finished) return false;
         List<Expansion> expansions = new List<Expansion>();
 
         // one expansion in each direction
         foreach(Vector2 dir in directions)
         {
+            
+
             List<Face> nextFaces = new List<Face>();
 
             foreach(Face face in room.faces)
             {
                 // check if valid
                 Face nextFace = face.GetNextFace(dir);
-                if (nextFace != null) nextFaces.Add(nextFace);
+                if (nextFace != null && nextFace.room == null && !nextFaces.Contains(nextFace)) nextFaces.Add(nextFace);
+                else continue;
 
+                if (nextFace.connectedFaces.Count > 0)
+                {
+                    foreach(Face face2 in nextFace.connectedFaces)
+                    {
+                        if (face2.room == null && !nextFaces.Contains(face2)) nextFaces.Add(face2);
+                    }
+                }
+
+                /*
                 // add also all the connected faces
                 if (face.connectedFaces.Count  > 0)
                 {
                     foreach(Face face2 in face.connectedFaces)
                     {
                         Face nextFace2 = face2.GetNextFace(dir);
-                        if (nextFace2 != null) nextFaces.Add(nextFace2);
+                        if (nextFace2 != null && nextFace2.room == null && !nextFaces.Contains(nextFace2)) nextFaces.Add(nextFace2);
                     }
                 }
+                */
+            }
+
+            if (nextFaces.Count > 1)
+            {
+                // check if not disrupting rectangular rooms
+                bool valid = true;
+
+                foreach(Face face in nextFaces)
+                {
+                    Face previous = face.GetAdjacentFace(-dir);
+                    Face next = face.GetAdjacentFace(dir);
+
+                    // three conditions, needs to pass at least one
+
+                    if (previous != null && previous.room == room)
+                    {
+                        continue;
+                    } else if (previous != null && nextFaces.Contains(previous))
+                    {
+                        continue;
+                    } else if (next != null && nextFaces.Contains(next))
+                    {
+                        continue;
+                    } else
+                    {
+                        valid = false; break;
+                    }
+                    
+
+                    /*
+                    if (previous == null || (previous.room != room && !nextFaces.Contains(previous)))
+                    {
+                        Face next = face.GetAdjacentFace(dir);
+                        if (next == null || !nextFaces.Contains(next))
+                        {
+                            valid = false; break;
+                        }
+                    }
+                    */
+                }
+
+                if (!valid) continue;
             }
 
             if (nextFaces.Count > 0)
             {
-                Expansion exp = new Expansion(nextFaces, nextFaces.Count);
+                // stops from disrupting already rectangular rooms
+                if (room.IsRectangular() && room.GetElementsNumber(dir) != nextFaces.Count) continue;
+                Expansion exp = new Expansion(nextFaces, nextFaces.Count, dir);
+                if (room.lastDirection == dir) exp.AddScore(-5);
                 expansions.Add(exp);
             }
         }
@@ -644,11 +702,17 @@ public class Generator : MonoBehaviour
         expansions.Sort();
 
         // extend
+
+       
+
         if (expansions.Count > 0)
         {
+            UnityEngine.Debug.Log("Expand: " + room.color + ": " + expansions.Count +
+           " options, chosen option with " + expansions[0].multipleFaces.Count + " next faces " + expansions[0].direction);
+
             foreach (Face face in expansions[0].multipleFaces)
                 {
-                    face.SetRoom(room);
+                    face.SetRoom(room, expansions[0].direction);
                 }
             return true;
         }
@@ -698,7 +762,7 @@ public class Generator : MonoBehaviour
                 }
                 else
                 {
-                    Expansion exp = new Expansion(otherFace, 0.5f);
+                    Expansion exp = new Expansion(otherFace, 0.5f, dir);
                     expansions.Add(exp);
                 }
             }
@@ -712,14 +776,14 @@ public class Generator : MonoBehaviour
         {
             if (expansions[0].nextFace != null)
             {
-                expansions[0].nextFace.SetRoom(room);
+                expansions[0].nextFace.SetRoom(room, expansions[0].direction);
                 return true;
             }
             else
             {
                 foreach (Face face in expansions[0].multipleFaces)
                 {
-                    face.SetRoom(room);
+                    face.SetRoom(room, expansions[0].direction);
                 }
                 return true;
             }
@@ -761,7 +825,7 @@ public class Generator : MonoBehaviour
 
                     if (!onList)
                     {
-                        Expansion exp = new Expansion(otherFace, 0.5f);
+                        Expansion exp = new Expansion(otherFace, 0.5f, dir);
                         if (otherFace.IsExteriorAdjacent()) exp.AddScore(1);
 
                         expansions.Add(exp);
@@ -776,7 +840,7 @@ public class Generator : MonoBehaviour
         // extend
         if (expansions.Count != 0)
         {
-            expansions[0].nextFace.SetRoom(room);
+            expansions[0].nextFace.SetRoom(room, expansions[0].direction);
             return true;
         }
         else
@@ -792,19 +856,22 @@ public class Generator : MonoBehaviour
     {
         public Face nextFace;
         public float score;
+        public Vector2 direction;
 
         public List<Face> multipleFaces;
 
-        public Expansion(Face nextFace, float score)
+        public Expansion(Face nextFace, float score, Vector2 direction)
         {
             this.nextFace = nextFace;
             this.score = score;
+            this.direction = direction;
         }
 
-        public Expansion(List<Face> multipleFaces, float score)
+        public Expansion(List<Face> multipleFaces, float score, Vector2 direction)
         {
             this.multipleFaces = multipleFaces;
             this.score = score;
+            this.direction = direction;
         }
 
         public int CompareTo(Expansion other)

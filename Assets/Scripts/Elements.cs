@@ -16,34 +16,42 @@ public class Room
     public bool passedMinArea = false;
     public bool isRectangular = false;
     public bool finished = false;
+    public Vector2 lastDirection = Vector2.zero;
 
     public List<Face> faces;
     private float currentArea = 0;
+    private int currentRows = 0;
+    private int currentCols = 0;
 
-    public Room(float exteriorPreference, Vector2 preferredDirection, float minArea, bool preferRectangular, Face face, Color color)
+    public Room(float minArea, bool preferRectangular, Face face, Color color)
     {
-        this.exteriorPreference = exteriorPreference;
-        this.preferredDirection = preferredDirection;
         this.minArea = minArea;
         this.preferRectangular = preferRectangular;
 
-        faces = new List<Face>();
-        face.SetRoom(this);
-        
         this.color = color;
         face.GetComponent<Renderer>().material.color = color;
+
+        faces = new List<Face>();
+        face.SetRoom(this, Vector2.zero);
     }
 
-    public void AddFace(Face face)
+    public void AddFace(Face face, Vector2 dir)
     {
+        lastDirection = dir;
+        if (faces.Contains(face)) return;
+
         faces.Add(face);
         face.room = this;
-        face.Recolor();
+        face.Recolor(color);
         currentArea += face.GetArea();
+
+        // Debug
+        //if (faces.Count > 100) finished = true;
 
         if (currentArea >= minArea) passedMinArea = true;
         if (preferRectangular) isRectangular = IsRectangular();
         if (isRectangular && passedMinArea) finished = true;
+        //if (!isRectangular) finished = true;
     }
 
     public bool IsRectangular()
@@ -54,17 +62,44 @@ public class Room
 
         foreach (Face face in faces)
         {
-            if (rows.ContainsKey(face.transform.position.y)) rows[face.transform.position.y]++;
-            else rows.Add(face.transform.position.y, 1);
+            bool newRow = true, newCol = true;
 
-            if (columns.ContainsKey(face.transform.position.x)) columns[face.transform.position.x]++;
-            else columns.Add(face.transform.position.x, 1);
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (Mathf.Abs(rows.ElementAt(i).Key - face.transform.position.y) < 0.001)
+                {
+                    rows[rows.ElementAt(i).Key]++;
+                    newRow = false;
+                    break;
+                }
+            }
+            if (newRow) rows.Add(face.transform.position.y, 1);
+
+            for (int i = 0; i < columns.Count; i++)
+            {
+                if (Mathf.Abs(columns.ElementAt(i).Key - face.transform.position.x) < 0.001)
+                {
+                    columns[columns.ElementAt(i).Key]++;
+                    newCol = false;
+                    break;
+                }
+            }
+            if (newCol) columns.Add(face.transform.position.x, 1);
         }
 
         for(int i = 0; i < rows.Count - 1; i++) { if (rows.ElementAt(i).Value != rows.ElementAt(i + 1).Value) return false; }
         for (int i = 0; i < columns.Count - 1; i++) { if (columns.ElementAt(i).Value != columns.ElementAt(i + 1).Value) return false; }
 
+        currentRows = rows.Count;
+        currentCols = columns.Count;
+
         return true;
+    }
+
+    public int GetElementsNumber(Vector2 direction)
+    {
+        if (direction == Vector2.left || direction == Vector2.right) return currentRows;
+        else return currentCols;
     }
 }
 

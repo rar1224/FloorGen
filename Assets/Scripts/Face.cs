@@ -107,18 +107,24 @@ public class Face : MonoBehaviour {
         else return null;
     }
 
+    public Face GetAdjacentFace(Vector2 direction)
+    {
+        Edge edge = GetEdgeInDirection(direction);
+        return edge.GetOtherFace(this);
+    }
+
     public bool IsConnectedTo(Face face)
     {
         return connectedFaces.Contains(face);
     }
 
-    public void SetRoom(Room room)
+    public void SetRoom(Room room, Vector2 dir)
     {
-        room.AddFace(this);
+        room.AddFace(this, dir);
 
         foreach (Face face in connectedFaces)
         {
-            room.AddFace(face);
+            room.AddFace(face, dir);
         }
     }
 
