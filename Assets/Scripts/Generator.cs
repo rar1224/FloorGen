@@ -136,7 +136,8 @@ public class Generator : MonoBehaviour
 
         else if (status == Status.MakingRooms)
         {
-            SetupRooms();
+            SetupRoomsFull();
+            //SetupRoomsRandom();
             status++;
         }
         else if (status == Status.ExpandingRooms) {
@@ -150,6 +151,11 @@ public class Generator : MonoBehaviour
             if (counter == 0) status++;
             
         } 
+        else if (status == Status.FillingGaps)
+        {
+            //FillGaps();
+            status++;
+        }
     }
 
     public void DivideCurrentLoop()
@@ -549,50 +555,116 @@ public class Generator : MonoBehaviour
                 }
             }
 
-            // setup windows
+            
+        }
 
-            foreach (ExternalWall wall in ext.possibleWalls)
+        // setup windows
+
+        foreach (ExternalWall wall in allWalls)
+        {
+            if (wall.windowsNumber == 0 && wall.objects.Count == 0) continue;
+            else
             {
-                if (wall.windowsNumber == 0) continue;
-                else {
-                    wall.SetupWindows(width, windowPrefab);
-                    wall.SetupAll();
-                }
+                wall.SetupWindows(width, windowPrefab);
+                wall.SetupAll();
             }
         }
     }
 
-    public void SetupRooms()
+    public void SetupRoomsRandom()
     {
         List<Face> exteriorFaces = new List<Face>();
+        Face entranceFace = null;
 
-        foreach (Face face in allFaces)
+        foreach (ExternalWall wall in allWalls)
         {
-            if (face.IsExteriorAdjacent()) exteriorFaces.Add(face);
+            foreach(Edge edge in wall.edges)
+            {
+                if (!exteriorFaces.Contains(edge.faces[0]))
+                {
+                    exteriorFaces.Add(edge.faces[0]);
+                    if (edge.faces[0].hasFrontDoor) entranceFace = edge.faces[0];
+                }
+            }
         }
 
-        for (int i = 0; i < 5; i++)
-        {
+        int number = 1;
+        int spread = exteriorFaces.Count / number;
 
+        for (int i = 0; i < number; i++)
+        {
             Face face = null;
+            int add = 0; 
             while (face == null)
             {
-                face = exteriorFaces[Random.Range(0, exteriorFaces.Count)];
-                if (face.room == null) break;
-                else face = null;
+                face = exteriorFaces[spread * i + add];
+                if (face.room != null) { add++; face = null; }
             }
 
-            Room room = new Room(1000, true, face, Random.ColorHSV());
+            Room room = new Room(1000, face, Random.ColorHSV());
 
             UnityEngine.Debug.Log("room face " + face.transform.position);
             allRooms.Add(room);
         }
-            /*
-            Face face = allFaces[0];
-            Room room = new Room(1, Vector2.zero, 5, true, face, Random.ColorHSV());
-            allRooms.Add(room);
-            */
-        //}
+    }
+
+    public void SetupRoomsFull()
+    {
+        List<Face> exteriorFaces = new List<Face>();
+        Face entranceFace = null;
+
+        foreach (ExternalWall wall in allWalls)
+        {
+            foreach (Edge edge in wall.edges)
+            {
+                if (!exteriorFaces.Contains(edge.faces[0]))
+                {
+                    exteriorFaces.Add(edge.faces[0]);
+                    if (edge.faces[0].hasFrontDoor) entranceFace = edge.faces[0];
+                }
+            }
+        }
+
+        int number = 5;
+        int spread = exteriorFaces.Count / number;
+
+        
+        // entrance room
+        Room entrance = new Room(15, entranceFace, new Color(0.43f, 0.82f, 0.16f));
+        allRooms.Add(entrance);
+
+        // other rooms
+
+        List<Face> chosenFaces = new List<Face>();
+
+        for (int i = 0; i < number; i++)
+        {
+            Face face = null;
+            int add = 0;
+            while (face == null)
+            {
+                face = exteriorFaces[spread * i + add];
+                if (face.room != null || chosenFaces.Contains(face)) { add++; face = null; }
+                else
+                {
+                    foreach (Face face1 in face.connectedFaces)
+                    {
+                        if (chosenFaces.Contains(face1)) { add++; face = null; break; }
+                    }
+                }
+            }
+
+            chosenFaces.Add(face);
+        }
+
+        Room livingRoom = new Room(15, chosenFaces[0], Color.yellow);
+        Room bedroom = new Room(15, chosenFaces[1], Color.cyan);
+        Room bathroom = new Room(15, chosenFaces[2], Color.gray);
+        Room kitchen = new Room(15, chosenFaces[3], Color.magenta);
+        allRooms.Add(livingRoom);
+        allRooms.Add(bedroom);
+        allRooms.Add(bathroom);
+        allRooms.Add(kitchen);
     }
 
     public int ExpandRooms()
@@ -612,92 +684,89 @@ public class Generator : MonoBehaviour
         if (room.finished) return false;
         List<Expansion> expansions = new List<Expansion>();
 
+        int repeatCounter = 2;
+
         // one expansion in each direction
-        foreach(Vector2 dir in directions)
+
+        for (int i = 0; i < repeatCounter; i++)
         {
-            
+            UnityEngine.Debug.Log(i);
 
-            List<Face> nextFaces = new List<Face>();
-
-            foreach(Face face in room.faces)
+            foreach (Vector2 dir in directions)
             {
-                // check if valid
-                Face nextFace = face.GetNextFace(dir);
-                if (nextFace != null && nextFace.room == null && !nextFaces.Contains(nextFace)) nextFaces.Add(nextFace);
-                else continue;
+                List<Face> nextFaces = new List<Face>();
+                bool dirValid = true;
 
-                if (nextFace.connectedFaces.Count > 0)
+                foreach (Face face in room.faces)
                 {
-                    foreach(Face face2 in nextFace.connectedFaces)
+                    Face nextFace = face.GetNextFace(dir);
+                    if (nextFace != null) nextFace.AddToNextFaces(nextFaces);
+                }
+
+                for (int k = 0; k < i; k++)
+                {
+                    foreach (Face face in room.faces)
                     {
-                        if (face2.room == null && !nextFaces.Contains(face2)) nextFaces.Add(face2);
+                        Face nextFace = face.GetNextFace(dir);
+
+                        for (int j = 0; j < k + 1; j++)
+                        {
+                            if (nextFace != null) nextFace = nextFace.GetNextFace(dir);
+                            else break;
+                        }
+
+                        if (nextFace == null || (nextFace.room != null && nextFace.room != room)) {dirValid = false; break; }
+                        else nextFace.AddToNextFaces(nextFaces);
                     }
                 }
 
-                /*
-                // add also all the connected faces
-                if (face.connectedFaces.Count  > 0)
+                if (!dirValid) continue;
+
+                if (nextFaces.Count > 1)
                 {
-                    foreach(Face face2 in face.connectedFaces)
-                    {
-                        Face nextFace2 = face2.GetNextFace(dir);
-                        if (nextFace2 != null && nextFace2.room == null && !nextFaces.Contains(nextFace2)) nextFaces.Add(nextFace2);
-                    }
-                }
-                */
-            }
+                    // check if not disrupting rectangular rooms
+                    bool valid = true;
 
-            if (nextFaces.Count > 1)
-            {
-                // check if not disrupting rectangular rooms
-                bool valid = true;
-
-                foreach(Face face in nextFaces)
-                {
-                    Face previous = face.GetAdjacentFace(-dir);
-                    Face next = face.GetAdjacentFace(dir);
-
-                    // three conditions, needs to pass at least one
-
-                    if (previous != null && previous.room == room)
+                    foreach (Face face in nextFaces)
                     {
-                        continue;
-                    } else if (previous != null && nextFaces.Contains(previous))
-                    {
-                        continue;
-                    } else if (next != null && nextFaces.Contains(next))
-                    {
-                        continue;
-                    } else
-                    {
-                        valid = false; break;
-                    }
-                    
-
-                    /*
-                    if (previous == null || (previous.room != room && !nextFaces.Contains(previous)))
-                    {
+                        Face previous = face.GetAdjacentFace(-dir);
                         Face next = face.GetAdjacentFace(dir);
-                        if (next == null || !nextFaces.Contains(next))
+
+                        // three conditions, needs to pass at least one
+
+                        if (previous != null && previous.room == room)
+                        {
+                            continue;
+                        }
+                        else if (previous != null && nextFaces.Contains(previous))
+                        {
+                            continue;
+                        }
+                        else if (next != null && nextFaces.Contains(next))
+                        {
+                            continue;
+                        }
+                        else
                         {
                             valid = false; break;
                         }
                     }
-                    */
+
+                    if (!valid) continue;
                 }
 
-                if (!valid) continue;
-            }
-
-            if (nextFaces.Count > 0)
-            {
-                // stops from disrupting already rectangular rooms
-                if (room.IsRectangular() && room.GetElementsNumber(dir) != nextFaces.Count) continue;
-                Expansion exp = new Expansion(nextFaces, nextFaces.Count, dir);
-                if (room.lastDirection == dir) exp.AddScore(-5);
-                expansions.Add(exp);
+                if (nextFaces.Count > 0)
+                {
+                    // stops from disrupting already rectangular rooms
+                    if (room.IsRectangular() && room.GetElementsNumber(dir) * (i + 1) != nextFaces.Count) continue;
+                    Expansion exp = new Expansion(nextFaces, nextFaces.Count, dir);
+                    if (room.lastDirection == dir) exp.AddScore(-5);
+                    expansions.Add(exp);
+                }
             }
         }
+
+        
 
         expansions.Sort();
 
@@ -849,8 +918,66 @@ public class Generator : MonoBehaviour
         }
     }
 
+    public bool FillGaps()
+    {
+        // reverse expansion - each cell chooses which room it belongs to
+        // connected cells work together
+
+        // check if all are filled, will be able to run again if not
+        bool allFilled = true;
+
+        foreach(Face face in allFaces)
+        {
+            if (face.room == null)
+            {
+                face.Recolor(Color.white);
+
+                List<Expansion> expansions = new List<Expansion>();
+
+                foreach(Vector2 dir in directions)
+                {
+                    Face nextFace = face.GetAdjacentFace(dir);
+
+                    if (nextFace != null && nextFace.room != null)
+                    {
+                        bool onList = false;
+
+                        foreach(Expansion exp in expansions)
+                        {
+                            if (exp.room == nextFace.room) onList = true;
+                        }
+
+                        if (onList) continue;
+
+                        List<Face> currentFaces = new List<Face> { face };
+                        if (face.connectedFaces.Count > 0) currentFaces.AddRange(face.connectedFaces);
+
+                        // calculate score - will it make the room more or less square
+                        float score = nextFace.room.CalculateNewSquareScore(currentFaces);
+
+                        Expansion expansion = new Expansion(nextFace.room, score, dir);
+                        expansions.Add(expansion);
+
+                    }
+                }
+
+                if (expansions.Count > 0)
+                {
+                    expansions.Sort();
+
+                    face.SetRoom(expansions[0].room, expansions[0].direction);
+                } else
+                {
+                    allFilled = false;
+                }
+            }
+        }
+
+        return allFilled;
+    }
+
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
-        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, Completed }
+        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, Completed }
 
     public class Expansion : IComparable<Expansion>
     {
@@ -859,6 +986,7 @@ public class Generator : MonoBehaviour
         public Vector2 direction;
 
         public List<Face> multipleFaces;
+        public Room room;
 
         public Expansion(Face nextFace, float score, Vector2 direction)
         {
@@ -870,6 +998,13 @@ public class Generator : MonoBehaviour
         public Expansion(List<Face> multipleFaces, float score, Vector2 direction)
         {
             this.multipleFaces = multipleFaces;
+            this.score = score;
+            this.direction = direction;
+        }
+
+        public Expansion(Room room, float score, Vector2 direction)
+        {
+            this.room = room;
             this.score = score;
             this.direction = direction;
         }

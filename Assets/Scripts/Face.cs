@@ -8,8 +8,8 @@ public class Face : MonoBehaviour {
     public Room room;
 
     public List<Face> connectedFaces = new List<Face>();
-    private bool hasWindows = false;
-    private bool hasFrontDoor = false;
+    public bool hasWindows = false;
+    public bool hasFrontDoor = false;
 
     // Start is called before the first frame update
     void Start()
@@ -145,6 +145,20 @@ public class Face : MonoBehaviour {
         if (direction.x == 0 && transform.position.x == face.transform.position.x) return true;
         else if (direction.y == 0 && transform.position.y == face.transform.position.y) return true;
         else return false;
+    }
+
+    public void AddToNextFaces(List<Face> nextFaces)
+    {
+        if (room == null && !nextFaces.Contains(this)) nextFaces.Add(this);
+        else return;
+
+        if (connectedFaces.Count > 0)
+        {
+            foreach (Face face in connectedFaces)
+            {
+                face.AddToNextFaces(nextFaces);
+            }
+        }
     }
 
 }

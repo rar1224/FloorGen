@@ -10,7 +10,6 @@ public class Room
     public float exteriorPreference;
     public Vector2 preferredDirection;
     public float minArea;
-    public bool preferRectangular;
     public Color color;
 
     public bool passedMinArea = false;
@@ -20,13 +19,14 @@ public class Room
 
     public List<Face> faces;
     private float currentArea = 0;
-    private int currentRows = 0;
-    private int currentCols = 0;
+    public int currentRows = 0;
+    public int currentCols = 0;
 
-    public Room(float minArea, bool preferRectangular, Face face, Color color)
+    public List<Edge> roomWalls;
+
+    public Room(float minArea, Face face, Color color)
     {
         this.minArea = minArea;
-        this.preferRectangular = preferRectangular;
 
         this.color = color;
         face.GetComponent<Renderer>().material.color = color;
@@ -49,7 +49,7 @@ public class Room
         //if (faces.Count > 100) finished = true;
 
         if (currentArea >= minArea) passedMinArea = true;
-        if (preferRectangular) isRectangular = IsRectangular();
+        isRectangular = IsRectangular();
         if (isRectangular && passedMinArea) finished = true;
         //if (!isRectangular) finished = true;
     }
@@ -100,6 +100,58 @@ public class Room
     {
         if (direction == Vector2.left || direction == Vector2.right) return currentRows;
         else return currentCols;
+    }
+
+    public float CalculateNewSquareScore(List<Face> nextFaces)
+    {
+        IsRectangular();
+
+        List<Face> allPossibleFaces = new List<Face>();
+        allPossibleFaces.AddRange(faces);
+        allPossibleFaces.AddRange(nextFaces);
+
+        // check rows
+        Dictionary<float, int> rows = new Dictionary<float, int>();
+        Dictionary<float, int> columns = new Dictionary<float, int>();
+
+        foreach (Face face in allPossibleFaces)
+        {
+            bool newRow = true, newCol = true;
+
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (Mathf.Abs(rows.ElementAt(i).Key - face.transform.position.y) < 0.001)
+                {
+                    rows[rows.ElementAt(i).Key]++;
+                    newRow = false;
+                    break;
+                }
+            }
+            if (newRow) rows.Add(face.transform.position.y, 1);
+
+            for (int i = 0; i < columns.Count; i++)
+            {
+                if (Mathf.Abs(columns.ElementAt(i).Key - face.transform.position.x) < 0.001)
+                {
+                    columns[columns.ElementAt(i).Key]++;
+                    newCol = false;
+                    break;
+                }
+            }
+            if (newCol) columns.Add(face.transform.position.x, 1);
+        }
+
+        // caluclate score
+
+        float currentRatio = Math.Abs(currentCols / currentRows - 1);
+        float possibleRatio = Math.Abs(columns.Count / rows.Count - 1);
+
+        return currentRatio - possibleRatio;
+    }
+
+    public void FindWalls()
+    {
+
     }
 }
 
@@ -187,6 +239,8 @@ public class ExternalWall : IComparable<ExternalWall>
         // position everything 
         // check how much space will be left for gaps
         float emptySpace = length;
+
+        Debug.Log(objects.Count);
 
         foreach(GameObject obj in objects)
         {
