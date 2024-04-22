@@ -22,7 +22,8 @@ public class Room
     public int currentRows = 0;
     public int currentCols = 0;
 
-    public List<Edge> roomWalls;
+    public List<Wall> roomWalls;
+    public List<Edge> roomEdges;
 
     public Room(float minArea, Face face, Color color)
     {
@@ -33,6 +34,8 @@ public class Room
 
         faces = new List<Face>();
         face.SetRoom(this, Vector2.zero);
+
+        this.roomEdges = new List<Edge>();
     }
 
     public void AddFace(Face face, Vector2 dir)
@@ -149,32 +152,154 @@ public class Room
         return currentRatio - possibleRatio;
     }
 
-    public void FindWalls()
+    public List<Wall> FindWalls(List<Room> passedRooms)
     {
+        roomWalls = new List<Wall>();
+        roomEdges = new List<Edge>();
 
+        foreach (Face face in faces)
+        {
+            foreach (Edge edge in face.edges)
+            {
+                if (edge.IsBetweenRooms() && !roomEdges.Contains(edge))
+                {
+                    edge.Recolor(Color.red);
+                    roomEdges.Add(edge);
+                }
+            }
+        }
+
+        Vertex origin = roomEdges[0].Vertex1;
+        Vertex next = roomEdges[0].Vertex2;
+
+        Edge currentEdge = roomEdges[0];
+        Room currentOtherRoom = currentEdge.GetOtherRoom(this);
+
+        Wall wall = new Wall();
+        Wall currentWall = wall;
+
+        currentWall.edges.Add(currentEdge);
+
+        
+        while (next != origin)
+        {
+            foreach (Edge edge in next.edges)
+            {
+                if (edge != currentEdge && roomEdges.Contains(edge))
+                {
+                    currentEdge = edge;
+                    next = currentEdge.GetOtherVertex(next);
+
+                    Room otherRoom = currentEdge.GetOtherRoom(this);
+                    if (passedRooms.Contains(otherRoom)) break;
+
+                    // still the same wall
+                    if (currentWall.IsAligned(edge)
+                        && otherRoom == currentOtherRoom)
+                    {
+                        currentWall.edges.Add(currentEdge);
+
+                    } else
+                    {
+                        currentOtherRoom = otherRoom;
+                        currentEdge.Recolor(Color.red);
+
+                        Wall newWall = new Wall();
+                        newWall.edges.Add(currentEdge);
+
+                        roomWalls.Add(currentWall);
+                        currentWall = newWall;
+                    }
+                    break;
+                }
+            }
+        }
+        
+
+        //currentWall.edges.Add(currentEdge);
+        roomWalls.Add(currentWall);
+        Debug.Log(roomWalls.Count);
+
+        return roomWalls;
+
+        /*
+        foreach(Face face in faces)
+        {
+            foreach(Edge edge in face.edges)
+            {
+                if (edge.IsBetweenRooms() && !edges.Contains(edge))
+                {
+                    edges.Add(edge);
+                    roomEdges.Add(edge);
+                    Face otherFace = edge.GetOtherFace(face);
+                    
+                    if (otherFace != null && otherFace.room != null ) otherFace.room.roomEdges.Add(edge);
+
+                    edge.IsInteriorWall = true;
+                    edge.Recolor(Color.yellow);
+                }
+            }
+        }
+        */
     }
+
+    public float GetArea()
+    {
+        return currentArea;
+    }
+
 }
 
-public class ExternalWall : IComparable<ExternalWall>
+public class Wall : IComparable<Wall>
 {
     public List<Edge> edges;
-    public List<GameObject> objects = new List<GameObject>();
+    protected float length = 0;
+    protected Vector2 orientation;
 
-    private float length = 0;
-    private Vector2 orientation;
+    private List<Room> rooms;
 
-    private int maxWindowsNumber = 0;
-    public int windowsNumber = 0;
-    private bool hasDoor = false;
-    private float gap = 0;
+    public Vector2 Orientation { get => orientation; }
+    public float Length { get => length; }
 
-    public Vector2 Orientation { get => orientation;}
-    public float Length { get => length;}
-    public int MaxWindowsNumber { get => maxWindowsNumber; set => maxWindowsNumber = value; }
-
-    public ExternalWall()
+    public Wall()
     {
         this.edges = new List<Edge>();
+    }
+
+    public Wall(Edge edge)
+    {
+        this.edges = new List<Edge>();
+        edges.Add(edge);
+        rooms = new List<Room> { edge.faces[0].room, edge.faces[1].room };
+    }
+    public int CompareTo(Wall other)
+    {
+        if (other.length < length) return -1;
+        else if (other.length > length) return 1;
+        else return 0;
+    }
+
+    public bool CheckFit(Edge edge)
+    {
+        Edge check = edges[0];
+
+        if (!edges.Contains(edge) && (rooms.Contains(check.faces[0].room) && rooms.Contains(check.faces[1].room))
+            && (edge.Direction == orientation || edge.Direction == -orientation))
+        {
+            foreach(Edge edge1 in edges)
+            {
+                if (edge1.FindCommonVertex(edge) != null)
+                {
+                    edges.Add(edge);
+                    return true;
+                }
+            }
+            return false;
+            
+        } else
+        {
+            return false;
+        }
     }
 
     public bool IsAligned(Edge edge)
@@ -183,6 +308,26 @@ public class ExternalWall : IComparable<ExternalWall>
         else if (edges[0].Direction == edge.Direction || edges[0].Direction == -edge.Direction) return true;
         else return false;
     }
+
+}
+
+public class ExternalWall : Wall
+{ 
+    public List<GameObject> objects = new List<GameObject>();
+
+    private int maxWindowsNumber = 0;
+    public int windowsNumber = 0;
+    private bool hasDoor = false;
+    private float gap = 0;
+
+    public int MaxWindowsNumber { get => maxWindowsNumber; set => maxWindowsNumber = value; }
+
+    public ExternalWall()
+    {
+        this.edges = new List<Edge>();
+    }
+
+
 
     public void Calculate(float windowWidth, float gap)
     {
@@ -199,12 +344,7 @@ public class ExternalWall : IComparable<ExternalWall>
         maxWindowsNumber = (int)((length - gap) / (windowWidth + gap));
     }
 
-    public int CompareTo(ExternalWall other)
-    {
-        if (other.length < length) return -1;
-        else if (other.length > length) return 1;
-        else return 0;
-    }
+
 
     public void SetupDoor(float doorWidth, float windowWidth, float gap, GameObject doorPrefab)
     { 

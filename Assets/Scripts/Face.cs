@@ -113,6 +113,19 @@ public class Face : MonoBehaviour {
         return edge.GetOtherFace(this);
     }
 
+    public List<Face> GetAllAdjacentFaces()
+    {
+        List<Face> faces = new List<Face>();
+
+        foreach(Edge edge in edges)
+        {
+            Face otherFace = edge.GetOtherFace(this);
+            if (otherFace != null) faces.Add(otherFace);
+        }
+
+        return faces;
+    }
+
     public bool IsConnectedTo(Face face)
     {
         return connectedFaces.Contains(face);
@@ -157,6 +170,20 @@ public class Face : MonoBehaviour {
             foreach (Face face in connectedFaces)
             {
                 face.AddToNextFaces(nextFaces);
+            }
+        }
+    }
+
+    public void AddAdjacentEmptyFaces(List<Face> faces)
+    {
+        faces.Add(this);
+
+        foreach(Edge edge in edges)
+        {
+            Face otherFace = edge.GetOtherFace(this);
+            if (otherFace != null && otherFace.room == null && !faces.Contains(otherFace))
+            {
+                otherFace.AddAdjacentEmptyFaces(faces);
             }
         }
     }

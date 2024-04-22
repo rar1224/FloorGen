@@ -12,6 +12,7 @@ public class Edge : MonoBehaviour
     public Vector2 Direction { get; set; }
 
     public bool IsExterior = false;
+    public bool IsInteriorWall = false;
 
     // Start is called before the first frame update
     void Start()
@@ -115,4 +116,49 @@ public class Edge : MonoBehaviour
     {
         GetComponent<Renderer>().material.color = color;
     }
+
+    public bool IsBetweenRooms()
+    {
+        if (faces.Count == 2 && faces[0].room != faces[1].room) return true;
+        else if (faces.Count == 1) return true;
+        else return false;
+    }
+
+    public Room GetOtherRoom(Room room)
+    {
+        if (faces.Count == 1) return null;
+        else
+        {
+            if (faces[0].room == room) return faces[1].room;
+            else return faces[0].room;
+        }
+    }
+
+
+    /*
+    public bool FindInteriorWallPath(Edge end, List<Edge> passedWalls)
+    {
+        List<Edge> edges = Vertex1.GetNextInteriorEdges(this);
+        edges.AddRange(Vertex2.GetNextInteriorEdges(this));
+
+        foreach(Edge e in edges)
+        {
+            if (!passedWalls.Contains(e))
+            {
+                passedWalls.Add(e);
+
+                if (e == end) return true;
+                else
+                {
+                    if (e.FindInteriorWallPath(end, passedWalls))
+                    {
+                        Recolor(Color.red);
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+    */
 }

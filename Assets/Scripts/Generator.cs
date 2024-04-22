@@ -27,6 +27,7 @@ public class Generator : MonoBehaviour
     public List<Face> allFaces = new List<Face>();
     public List<Room> allRooms = new List<Room>();
     public List<ExternalWall> allWalls = new List<ExternalWall>();
+    public List<Wall> allRoomWalls = new List<Wall>();
 
     private List<Vertex> startLoop = new List<Vertex>();
     private List<Vertex> nextLoop = new List<Vertex>();
@@ -84,7 +85,7 @@ public class Generator : MonoBehaviour
             // dividing envelope into smaller cells
 
 
-            startLoop = DivideToCells(2, 2, true, true);
+            startLoop = DivideToCells(2f, 2f, true, true);
             status++;
             return;
 
@@ -153,7 +154,11 @@ public class Generator : MonoBehaviour
         } 
         else if (status == Status.FillingGaps)
         {
+            FillIslands();
             //FillGaps();
+            //FindWallsBetweenRooms();
+            //allRooms[1].FindWalls();
+            FindAllWalls();
             status++;
         }
     }
@@ -630,7 +635,7 @@ public class Generator : MonoBehaviour
 
         
         // entrance room
-        Room entrance = new Room(15, entranceFace, new Color(0.43f, 0.82f, 0.16f));
+        Room entrance = new Room(10, entranceFace, new Color(0.43f, 0.82f, 0.16f));
         allRooms.Add(entrance);
 
         // other rooms
@@ -643,6 +648,7 @@ public class Generator : MonoBehaviour
             int add = 0;
             while (face == null)
             {
+                //face = exteriorFaces[Random.Range(0, exteriorFaces.Count)];
                 face = exteriorFaces[spread * i + add];
                 if (face.room != null || chosenFaces.Contains(face)) { add++; face = null; }
                 else
@@ -657,10 +663,10 @@ public class Generator : MonoBehaviour
             chosenFaces.Add(face);
         }
 
-        Room livingRoom = new Room(15, chosenFaces[0], Color.yellow);
-        Room bedroom = new Room(15, chosenFaces[1], Color.cyan);
-        Room bathroom = new Room(15, chosenFaces[2], Color.gray);
-        Room kitchen = new Room(15, chosenFaces[3], Color.magenta);
+        Room livingRoom = new Room(100, chosenFaces[0], Color.yellow);
+        Room bedroom = new Room(100, chosenFaces[1], Color.cyan);
+        Room bathroom = new Room(100, chosenFaces[2], Color.gray);
+        Room kitchen = new Room(100, chosenFaces[3], Color.magenta);
         allRooms.Add(livingRoom);
         allRooms.Add(bedroom);
         allRooms.Add(bathroom);
@@ -684,7 +690,7 @@ public class Generator : MonoBehaviour
         if (room.finished) return false;
         List<Expansion> expansions = new List<Expansion>();
 
-        int repeatCounter = 2;
+        int repeatCounter = 1;
 
         // one expansion in each direction
 
@@ -703,6 +709,7 @@ public class Generator : MonoBehaviour
                     if (nextFace != null) nextFace.AddToNextFaces(nextFaces);
                 }
 
+                /*
                 for (int k = 0; k < i; k++)
                 {
                     foreach (Face face in room.faces)
@@ -719,6 +726,7 @@ public class Generator : MonoBehaviour
                         else nextFace.AddToNextFaces(nextFaces);
                     }
                 }
+                */
 
                 if (!dirValid) continue;
 
@@ -760,6 +768,7 @@ public class Generator : MonoBehaviour
                     // stops from disrupting already rectangular rooms
                     if (room.IsRectangular() && room.GetElementsNumber(dir) * (i + 1) != nextFaces.Count) continue;
                     Expansion exp = new Expansion(nextFaces, nextFaces.Count, dir);
+                    exp.AddScore(nextFaces.Count);
                     if (room.lastDirection == dir) exp.AddScore(-5);
                     expansions.Add(exp);
                 }
@@ -918,6 +927,85 @@ public class Generator : MonoBehaviour
         }
     }
 
+    public bool FillIslands()
+    {
+        // reverse expansion, but gaps close together work as islands
+        // divide space into islands
+        List<List<Face>> islands = new List<List<Face>>();
+
+        foreach(Face face in allFaces)
+        {
+            if (face.room == null)
+            {
+                bool isOnList = false;
+
+                foreach(List<Face> list in islands)
+                {
+                    if (list.Contains(face))
+                    {
+                        isOnList = true; break;
+                    }
+                }
+
+                if (!isOnList)
+                {
+                    List<Face> faces = new List<Face>();
+                    face.AddAdjacentEmptyFaces(faces);
+                    islands.Add(faces);
+                }
+            }
+        }
+
+        string counts = "";
+
+        foreach(List<Face> list in islands)
+        {
+            Dictionary<Room, int> adjacentRooms = new Dictionary<Room, int>();
+
+            foreach(Face face in list)
+            {
+                foreach (Face face1 in face.GetAllAdjacentFaces())
+                {
+                    if (face1.room != null)
+                    {
+                        if (adjacentRooms.ContainsKey(face1.room))
+                        {
+                            adjacentRooms[face1.room] += 1;
+
+                        } else
+                        {
+                            adjacentRooms.Add(face1.room, 1);
+                        }
+                        
+                    }
+                }
+            }
+
+            UnityEngine.Debug.Log(adjacentRooms.Count);
+
+            KeyValuePair<Room, int> chosen = adjacentRooms.FirstOrDefault();
+
+            foreach(KeyValuePair<Room, int> keyValuePair in adjacentRooms)
+            {
+                if (keyValuePair.Value > chosen.Value)
+                {
+                    chosen = keyValuePair;
+                } else if ((keyValuePair.Value == chosen.Value) && keyValuePair.Key.GetArea() < chosen.Key.GetArea())
+                {
+                    chosen = keyValuePair;
+                }
+            }
+
+            foreach(Face face in list)
+            {
+                face.SetRoom(chosen.Key, Vector2.zero);
+            }
+        }
+
+        
+        return true;
+    }
+
     public bool FillGaps()
     {
         // reverse expansion - each cell chooses which room it belongs to
@@ -975,6 +1063,91 @@ public class Generator : MonoBehaviour
 
         return allFilled;
     }
+
+    public void FindAllWalls()
+    {
+        List<Room> passedRooms = new List<Room>();
+
+        foreach (Room room in allRooms)
+        {
+            allRoomWalls.AddRange(room.FindWalls(passedRooms));
+            passedRooms.Add(room);
+        }
+    }
+
+    
+    public void FindWallsBetweenRooms()
+    {
+        List<Edge> roomEdges = new List<Edge>();
+
+        foreach(Room room in allRooms)
+        {
+            //room.FindWalls(roomEdges);
+        }
+    }
+
+    public void BFS(Vertex start, Dictionary<Vertex, Vertex> parents,
+        Dictionary<Vertex, int> distances)
+    {
+        // order of vertices
+        Queue<Vertex> queue = new Queue<Vertex>();
+        distances.Add(start, 0);
+        queue.Enqueue(start);
+
+        while (queue.Count > 0)
+        {
+            Vertex v = queue.Dequeue();
+
+            foreach (Edge edge in v.edges)
+            {
+                Vertex other = edge.GetOtherVertex(v);
+
+                if (!distances.ContainsKey(other) || distances[other] == int.MaxValue)
+                {
+                    // current node as parent of neighboring node
+                    if (parents.ContainsKey(other)) parents[other] = v;
+                    else parents.Add(other, v);
+
+                    if (distances.ContainsKey(other)) distances[other] = distances[v] + 1;
+                    else distances.Add(other, distances[v] + 1);
+
+                    queue.Enqueue(other);
+                }
+            }
+        }
+    }
+
+    public void ShortestPath(Vertex start, Vertex end, int count)
+    {
+        Dictionary<Vertex, Vertex> parents = new Dictionary<Vertex, Vertex>(count);
+        Dictionary<Vertex, int> distances = new Dictionary<Vertex, int>(count);
+
+        BFS(start, parents, distances);
+
+        if (!distances.ContainsKey(end)) UnityEngine.Debug.Log("not found");
+        else if (distances[end] == int.MaxValue) UnityEngine.Debug.Log("not found");
+        else
+        {
+            List<Vertex> path = new List<Vertex>();
+            Vertex current = end;
+            path.Add(end);
+            while (!parents.ContainsKey(current))
+            {
+                path.Add(parents[current]);
+                current = parents[current];
+            }
+
+            foreach (Vertex v in path)
+            {
+                v.Recolor(Color.blue);
+            }
+
+            UnityEngine.Debug.Log("Path: " + path.Count);
+        }
+
+        
+    }
+
 
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
         FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, Completed }
