@@ -155,10 +155,15 @@ public class Generator : MonoBehaviour
         else if (status == Status.FillingGaps)
         {
             FillIslands();
-            //FillGaps();
-            //FindWallsBetweenRooms();
-            //allRooms[1].FindWalls();
+            status++;
+
+        } else if (status == Status.MakingCorridors)
+        {
             FindAllWalls();
+
+            UnityEngine.Debug.Log("Room walls: " + allRooms[4].roomWalls.Count);
+
+            MakeCorridor(allRooms[0], allRooms[allRooms.Count - 1]);
             status++;
         }
     }
@@ -337,7 +342,7 @@ public class Generator : MonoBehaviour
                                            + (i + 1) * maxCellWidth * divisionDirection
                                            - minDistance * divisionDirection;
 
-                                    UnityEngine.Debug.Log(vertex.transform.position);
+                                    //UnityEngine.Debug.Log(vertex.transform.position);
                                 }
                             } else
                             {
@@ -453,6 +458,7 @@ public class Generator : MonoBehaviour
             if (currentWall.IsAligned(current))
             {
                 currentWall.edges.Add(current);
+                current.wall = currentWall;
             } else
             {
                 walls.Add(currentWall);
@@ -460,6 +466,7 @@ public class Generator : MonoBehaviour
 
                 currentWall = new ExternalWall();
                 currentWall.edges.Add(current);
+                current.wall = currentWall;
             }
             current.GetComponent<Renderer>().material.color = Color.blue;
             current = next.FindNextExternalEdge(current);
@@ -467,6 +474,8 @@ public class Generator : MonoBehaviour
         }
 
         currentWall.edges.Add(current);
+        current.wall = currentWall;
+
         walls.Add(currentWall);
         currentWall.Calculate(windowWidth, gap);
 
@@ -608,7 +617,7 @@ public class Generator : MonoBehaviour
 
             Room room = new Room(1000, face, Random.ColorHSV());
 
-            UnityEngine.Debug.Log("room face " + face.transform.position);
+            //UnityEngine.Debug.Log("room face " + face.transform.position);
             allRooms.Add(room);
         }
     }
@@ -696,7 +705,6 @@ public class Generator : MonoBehaviour
 
         for (int i = 0; i < repeatCounter; i++)
         {
-            UnityEngine.Debug.Log(i);
 
             foreach (Vector2 dir in directions)
             {
@@ -785,9 +793,10 @@ public class Generator : MonoBehaviour
 
         if (expansions.Count > 0)
         {
+            /*
             UnityEngine.Debug.Log("Expand: " + room.color + ": " + expansions.Count +
            " options, chosen option with " + expansions[0].multipleFaces.Count + " next faces " + expansions[0].direction);
-
+            */
             foreach (Face face in expansions[0].multipleFaces)
                 {
                     face.SetRoom(room, expansions[0].direction);
@@ -981,7 +990,7 @@ public class Generator : MonoBehaviour
                 }
             }
 
-            UnityEngine.Debug.Log(adjacentRooms.Count);
+            //UnityEngine.Debug.Log(adjacentRooms.Count);
 
             KeyValuePair<Room, int> chosen = adjacentRooms.FirstOrDefault();
 
@@ -1073,6 +1082,36 @@ public class Generator : MonoBehaviour
             allRoomWalls.AddRange(room.FindWalls(passedRooms));
             passedRooms.Add(room);
         }
+
+        foreach (Wall wall in allRoomWalls)
+        {
+            wall.FindAdjacentWalls();
+        }
+    }
+
+    public void MakeCorridor(Room room1, Room room2)
+    {
+        //List<Room> path = new List<Room>();
+        //UnityEngine.Debug.Log(room1.RoomDistance(room2, path, 10));
+
+        List<Wall> path = new List<Wall>();
+        List<Wall> shortest = room1.roomWalls[0].WallDistance(room2, path, 50);
+        UnityEngine.Debug.Log("Path length: " + shortest.Count);
+
+        foreach (Wall wall in shortest)
+        {
+            if (wall.rooms.Contains(room1) || wall.rooms.Contains(room2)) continue;
+
+            wall.Recolor(Color.green);
+
+            foreach (Edge edge in wall.edges)
+            {
+                foreach (Face face in edge.faces)
+                {
+                    face.Recolor(Color.black);
+                }
+            }
+        }
     }
 
     
@@ -1142,7 +1181,7 @@ public class Generator : MonoBehaviour
                 v.Recolor(Color.blue);
             }
 
-            UnityEngine.Debug.Log("Path: " + path.Count);
+//UnityEngine.Debug.Log("Path: " + path.Count);
         }
 
         
@@ -1150,7 +1189,7 @@ public class Generator : MonoBehaviour
 
 
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
-        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, Completed }
+        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, MakingCorridors, Completed }
 
     public class Expansion : IComparable<Expansion>
     {

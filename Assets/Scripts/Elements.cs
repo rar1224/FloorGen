@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEditor.PackageManager.UI;
 using UnityEngine;
 using static UnityEngine.UI.Image;
@@ -22,8 +23,8 @@ public class Room
     public int currentRows = 0;
     public int currentCols = 0;
 
-    public List<Wall> roomWalls;
-    public List<Edge> roomEdges;
+    public List<Wall> roomWalls = new List<Wall>();
+    public List<Edge> roomEdges = new List<Edge>();
 
     public Room(float minArea, Face face, Color color)
     {
@@ -154,8 +155,7 @@ public class Room
 
     public List<Wall> FindWalls(List<Room> passedRooms)
     {
-        roomWalls = new List<Wall>();
-        roomEdges = new List<Edge>();
+
 
         foreach (Face face in faces)
         {
@@ -175,12 +175,14 @@ public class Room
         Edge currentEdge = roomEdges[0];
         Room currentOtherRoom = currentEdge.GetOtherRoom(this);
 
-        Wall wall = new Wall();
+        Wall wall = new Wall(this, currentOtherRoom);
         Wall currentWall = wall;
 
         currentWall.edges.Add(currentEdge);
+        currentEdge.wall = currentWall;
 
-        
+        Debug.Log(this.color);
+
         while (next != origin)
         {
             foreach (Edge edge in next.edges)
@@ -190,35 +192,51 @@ public class Room
                     currentEdge = edge;
                     next = currentEdge.GetOtherVertex(next);
 
+                    bool paused = false;
+
                     Room otherRoom = currentEdge.GetOtherRoom(this);
-                    if (passedRooms.Contains(otherRoom)) break;
+                    if (otherRoom != null && passedRooms.Contains(otherRoom))
+                    {
+                        AddWall(currentWall, currentOtherRoom);
+                        currentEdge.Recolor(Color.red);
+                        currentOtherRoom = otherRoom;
+                        paused = true;
+                        break;
+                    }
 
                     // still the same wall
                     if (currentWall.IsAligned(edge)
                         && otherRoom == currentOtherRoom)
                     {
                         currentWall.edges.Add(currentEdge);
+                        currentEdge.wall = currentWall;
 
                     } else
                     {
+                        if (!paused)
+                        {
+                            // wall finished
+                            AddWall(currentWall, currentOtherRoom);
+                            currentEdge.Recolor(Color.red);
+                        }
+                        
+                        // start new wall
                         currentOtherRoom = otherRoom;
-                        currentEdge.Recolor(Color.red);
-
-                        Wall newWall = new Wall();
+                        Wall newWall = new Wall(this, currentOtherRoom);
                         newWall.edges.Add(currentEdge);
+                        currentEdge.wall = newWall;
 
-                        roomWalls.Add(currentWall);
                         currentWall = newWall;
                     }
                     break;
                 }
             }
         }
-        
+
 
         //currentWall.edges.Add(currentEdge);
-        roomWalls.Add(currentWall);
-        Debug.Log(roomWalls.Count);
+        AddWall(currentWall, currentOtherRoom);
+        //Debug.Log(roomWalls.Count);
 
         return roomWalls;
 
@@ -243,6 +261,78 @@ public class Room
         */
     }
 
+    public void AddWall(Wall wall, Room otherRoom)
+    {
+        roomWalls.Add(wall);
+        if (otherRoom != null) otherRoom.roomWalls.Add(wall);
+    }
+
+    public bool IsAdjacent(Room room)
+    {
+        foreach (Wall wall in roomWalls)
+        {
+            if (wall.rooms.Contains(room)) return true;
+        }
+
+        return false;
+    }
+
+    public List<Room> RoomDistance(Room room, List<Room> path, int maxDistance)
+    {
+        if (IsAdjacent(room))
+        {
+            path.Add(this);
+            return path;
+        }
+        else
+        {
+            path.Add(this);
+
+            List<Room> shortestPath = path;
+            int minimum = maxDistance;
+
+            foreach (Wall wall in roomWalls)
+            {
+                Room otherRoom = wall.GetOtherRoom(this);
+
+                if (otherRoom == null || path.Contains(otherRoom)) continue;
+                else
+                {
+                    List<Room> currentPath = new List<Room>();
+                    currentPath.AddRange(path);
+
+                    List<Room> nextPath = otherRoom.RoomDistance(room, currentPath, maxDistance);
+                    int distance = nextPath.Count;
+                    if (distance < minimum) { minimum = distance; shortestPath = nextPath; }
+                }
+            }
+
+            return shortestPath;
+        }
+    }
+
+    public List<Wall> ShortestWallDistance(Room room, int maxDistance)
+    {
+        List<Wall> shortest = new List<Wall>();
+        int count = maxDistance;
+
+        foreach (Wall wall in roomWalls)
+        {
+            List<Wall> path = new List<Wall>();
+            List<Wall> result = wall.WallDistance(room, path, maxDistance);
+            if (result.Count < count + 1) {
+                shortest = result;
+                shortest.Add(wall);
+                count = result.Count;
+            }
+        }
+
+
+        return shortest;
+    }
+
+    
+
     public float GetArea()
     {
         return currentArea;
@@ -256,7 +346,8 @@ public class Wall : IComparable<Wall>
     protected float length = 0;
     protected Vector2 orientation;
 
-    private List<Room> rooms;
+    public List<Room> rooms;
+    public List<Wall> adjacentWalls = new List<Wall>();
 
     public Vector2 Orientation { get => orientation; }
     public float Length { get => length; }
@@ -264,6 +355,12 @@ public class Wall : IComparable<Wall>
     public Wall()
     {
         this.edges = new List<Edge>();
+    }
+
+    public Wall(Room room1, Room room2)
+    {
+        this.edges = new List<Edge>();
+        rooms = new List<Room> { room1, room2 };
     }
 
     public Wall(Edge edge)
@@ -309,6 +406,73 @@ public class Wall : IComparable<Wall>
         else return false;
     }
 
+    public Room GetOtherRoom(Room room)
+    {
+        return edges[0].GetOtherRoom(room);
+    }
+
+    public void FindAdjacentWalls()
+    {
+        foreach(Edge edge in edges)
+        {
+            foreach(Edge edge1 in edge.Vertex1.edges)
+            {
+                if (edge1.wall != this && !adjacentWalls.Contains(edge1.wall))
+                {
+                    adjacentWalls.Add(edge1.wall);
+                }
+            }
+
+            foreach (Edge edge1 in edge.Vertex2.edges)
+            {
+                if (edge1.wall != this && !adjacentWalls.Contains(edge1.wall))
+                {
+                    adjacentWalls.Add(edge1.wall);
+                }
+            }
+        }
+    }
+
+
+    public List<Wall> WallDistance(Room room, List<Wall> path, int maxDistance)
+    {
+        if (rooms.Contains(room))
+        {
+            path.Add(this);
+            return path;
+        }
+        else
+        {
+            path.Add(this);
+
+            List<Wall> shortestPath = path;
+            int minimum = maxDistance;
+
+            foreach (Wall wall in adjacentWalls)
+            {
+                if (wall == null || path.Contains(wall)) continue;
+                else
+                {
+                    List<Wall> currentPath = new List<Wall>();
+                    currentPath.AddRange(path);
+
+                    List<Wall> nextPath = wall.WallDistance(room, currentPath, maxDistance);
+                    int distance = nextPath.Count;
+                    if (distance < minimum) { minimum = distance; shortestPath = nextPath; }
+                }
+            }
+
+            return shortestPath;
+        }
+    }
+
+    public void Recolor(Color color)
+    {
+        foreach(Edge edge in edges)
+        {
+            edge.Recolor(color);
+        }
+    }
 }
 
 public class ExternalWall : Wall
@@ -380,7 +544,7 @@ public class ExternalWall : Wall
         // check how much space will be left for gaps
         float emptySpace = length;
 
-        Debug.Log(objects.Count);
+        //Debug.Log(objects.Count);
 
         foreach(GameObject obj in objects)
         {

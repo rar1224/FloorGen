@@ -14,6 +14,8 @@ public class Edge : MonoBehaviour
     public bool IsExterior = false;
     public bool IsInteriorWall = false;
 
+    public Wall wall;
+
     // Start is called before the first frame update
     void Start()
     {
