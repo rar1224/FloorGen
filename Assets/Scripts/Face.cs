@@ -188,4 +188,63 @@ public class Face : MonoBehaviour {
         }
     }
 
+    public bool IsAdjacentToRoom(Room room)
+    {
+        foreach(Edge edge in edges)
+        {
+            if (edge.GetOtherFace(this) != null && edge.GetOtherFace(this).room == room) return true;
+        }
+
+        return false;
+    }
+
+    public Face GetFaceAdjacentToRoom(Room room)
+    {
+        foreach (Edge edge in edges)
+        {
+            Face face = edge.GetOtherFace(this);
+            if (face.IsAdjacentToRoom(room)) return face;
+        }
+
+        return null;
+    }
+
+    public Face GetNextCorridorFace(List<Face> corridor, List<Face> passedFaces)
+    {
+        foreach(Edge edge in edges)
+        {
+            Face face = edge.GetOtherFace(this);
+            if (face != null && corridor.Contains(face) && !passedFaces.Contains(face)) return face;
+        }
+
+        return null;
+    }
+
+    public Face GetNextCorridorFaceFill(List<Face> corridor, List<Face> passedFaces)
+    {
+        foreach(Edge edge in edges)
+        {
+            Face face = edge.GetOtherFace(this);
+            if (face == null || passedFaces.Contains(face)) continue;
+
+            foreach (Face corridorFace in corridor)
+            {
+                if (face.IsAdjacentTo(corridorFace)) return face;
+            }
+            
+        }
+
+        return null;
+    }
+
+    public void AddWithConnectedFaces(List<Face> list)
+    {
+        if (!list.Contains(this)) list.Add(this);
+        foreach (Face face in connectedFaces)
+        {
+            if (!list.Contains(face)) list.Add(face);
+        }
+    }
+
+
 }

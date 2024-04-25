@@ -19,7 +19,6 @@ public class Room
     public Vector2 lastDirection = Vector2.zero;
 
     public List<Face> faces;
-    private float currentArea = 0;
     public int currentRows = 0;
     public int currentCols = 0;
 
@@ -39,6 +38,19 @@ public class Room
         this.roomEdges = new List<Edge>();
     }
 
+    public Room(List<Face> faces, Color color)
+    {
+        this.faces = faces;
+        this.color = color;
+        
+        foreach(Face face in faces)
+        {
+            face.room.faces.Remove(face);
+            face.room = this;
+            face.Recolor(color);
+        }
+    }
+
     public void AddFace(Face face, Vector2 dir)
     {
         lastDirection = dir;
@@ -47,12 +59,11 @@ public class Room
         faces.Add(face);
         face.room = this;
         face.Recolor(color);
-        currentArea += face.GetArea();
 
         // Debug
         //if (faces.Count > 100) finished = true;
 
-        if (currentArea >= minArea) passedMinArea = true;
+        if (GetArea() >= minArea) passedMinArea = true;
         isRectangular = IsRectangular();
         if (isRectangular && passedMinArea) finished = true;
         //if (!isRectangular) finished = true;
@@ -175,7 +186,7 @@ public class Room
         Edge currentEdge = roomEdges[0];
         Room currentOtherRoom = currentEdge.GetOtherRoom(this);
 
-        Wall wall = new Wall(this, currentOtherRoom);
+        Wall wall = new Wall(this, currentOtherRoom, currentEdge.Direction);
         Wall currentWall = wall;
 
         currentWall.edges.Add(currentEdge);
@@ -222,7 +233,7 @@ public class Room
                         
                         // start new wall
                         currentOtherRoom = otherRoom;
-                        Wall newWall = new Wall(this, currentOtherRoom);
+                        Wall newWall = new Wall(this, currentOtherRoom, currentEdge.Direction);
                         newWall.edges.Add(currentEdge);
                         currentEdge.wall = newWall;
 
@@ -309,33 +320,18 @@ public class Room
 
             return shortestPath;
         }
-    }
-
-    public List<Wall> ShortestWallDistance(Room room, int maxDistance)
-    {
-        List<Wall> shortest = new List<Wall>();
-        int count = maxDistance;
-
-        foreach (Wall wall in roomWalls)
-        {
-            List<Wall> path = new List<Wall>();
-            List<Wall> result = wall.WallDistance(room, path, maxDistance);
-            if (result.Count < count + 1) {
-                shortest = result;
-                shortest.Add(wall);
-                count = result.Count;
-            }
-        }
-
-
-        return shortest;
-    }
-
-    
+    }   
 
     public float GetArea()
     {
-        return currentArea;
+        float area = 0;
+
+        foreach(Face face in faces)
+        {
+            area += face.GetArea();
+        }
+
+        return area;
     }
 
 }
@@ -357,10 +353,11 @@ public class Wall : IComparable<Wall>
         this.edges = new List<Edge>();
     }
 
-    public Wall(Room room1, Room room2)
+    public Wall(Room room1, Room room2, Vector2 orientation)
     {
         this.edges = new List<Edge>();
         rooms = new List<Room> { room1, room2 };
+        this.orientation = orientation;
     }
 
     public Wall(Edge edge)
@@ -464,6 +461,20 @@ public class Wall : IComparable<Wall>
 
             return shortestPath;
         }
+    }
+
+    public List<Face> GetFacesInDirection(Vector2 direction)
+    {
+        List<Face> faces = new List<Face>();
+
+        foreach (Edge edge in edges)
+        {
+            Face face = edge.GetFaceInDirection(direction);
+            if (face == null) return null;
+            else faces.Add(face);
+        }
+
+        return faces;
     }
 
     public void Recolor(Color color)

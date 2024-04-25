@@ -12,7 +12,6 @@ public class Edge : MonoBehaviour
     public Vector2 Direction { get; set; }
 
     public bool IsExterior = false;
-    public bool IsInteriorWall = false;
 
     public Wall wall;
 
@@ -136,31 +135,14 @@ public class Edge : MonoBehaviour
         }
     }
 
-
-    /*
-    public bool FindInteriorWallPath(Edge end, List<Edge> passedWalls)
+    public Face GetFaceInDirection(Vector2 direction)
     {
-        List<Edge> edges = Vertex1.GetNextInteriorEdges(this);
-        edges.AddRange(Vertex2.GetNextInteriorEdges(this));
-
-        foreach(Edge e in edges)
+        foreach(Face face in faces)
         {
-            if (!passedWalls.Contains(e))
-            {
-                passedWalls.Add(e);
-
-                if (e == end) return true;
-                else
-                {
-                    if (e.FindInteriorWallPath(end, passedWalls))
-                    {
-                        Recolor(Color.red);
-                    }
-                }
-            }
+            if (Vector2.Angle((face.transform.position - transform.position).normalized, (Vector3)direction) < 0.1) return face;
         }
 
-        return false;
+        return null;
     }
-    */
+
 }

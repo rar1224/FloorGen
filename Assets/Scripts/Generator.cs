@@ -165,6 +165,11 @@ public class Generator : MonoBehaviour
 
             MakeCorridor(allRooms[0], allRooms[allRooms.Count - 1]);
             status++;
+
+        } else if (status == Status.FixingWalls)
+        {
+            ResetWalls();
+            status++;
         }
     }
 
@@ -458,7 +463,6 @@ public class Generator : MonoBehaviour
             if (currentWall.IsAligned(current))
             {
                 currentWall.edges.Add(current);
-                current.wall = currentWall;
             } else
             {
                 walls.Add(currentWall);
@@ -466,7 +470,6 @@ public class Generator : MonoBehaviour
 
                 currentWall = new ExternalWall();
                 currentWall.edges.Add(current);
-                current.wall = currentWall;
             }
             current.GetComponent<Renderer>().material.color = Color.blue;
             current = next.FindNextExternalEdge(current);
@@ -1087,6 +1090,13 @@ public class Generator : MonoBehaviour
         {
             wall.FindAdjacentWalls();
         }
+
+        // Debug
+        foreach(Edge edge in allEdges)
+        {
+            if (edge.wall == null) edge.Recolor(Color.white);
+            else edge.Recolor(Color.blue);
+        }
     }
 
     public void MakeCorridor(Room room1, Room room2)
@@ -1096,100 +1106,159 @@ public class Generator : MonoBehaviour
 
         List<Wall> path = new List<Wall>();
         List<Wall> shortest = room1.roomWalls[0].WallDistance(room2, path, 50);
-        UnityEngine.Debug.Log("Path length: " + shortest.Count);
+
+        List<List<Face>> corridorOptions = new List<List<Face>>();
+        bool first = true;
+
+
 
         foreach (Wall wall in shortest)
         {
-            if (wall.rooms.Contains(room1) || wall.rooms.Contains(room2)) continue;
+            if ((wall.rooms.Contains(room1) || wall.rooms.Contains(room2)) &&
+                !(shortest.IndexOf(wall) == shortest.Count - 1 && corridorOptions.Count == 0)) continue;
 
             wall.Recolor(Color.green);
 
-            foreach (Edge edge in wall.edges)
+            
+            Vector2 dir1 = wall.Orientation.Perpendicular1();
+            Vector2 dir2 = -dir1;
+
+            List<Face> corridor1 = wall.GetFacesInDirection(dir1);
+            List<Face> corridor2 = wall.GetFacesInDirection(dir2);
+
+            List<List<Face>> newOptions = new List<List<Face>>();
+
+            if (first)
             {
-                foreach (Face face in edge.faces)
+                if (corridor1 != null) newOptions.Add(corridor1);
+                if (corridor2 != null) newOptions.Add(corridor2);
+                first = false;
+            } else
+            {
+                foreach (List<Face> option in corridorOptions)
                 {
-                    face.Recolor(Color.black);
+                    if (corridor1 != null)
+                    {
+                        List<Face> newOption = new List<Face>(option);
+                        foreach (Face face in corridor1) if (!newOption.Contains(face)) newOption.Add(face);
+                        newOptions.Add(newOption);
+                    }
+
+                    if (corridor2 != null)
+                    {
+                        List<Face> newOption = new List<Face>(option);
+                        foreach (Face face in corridor2) if (!newOption.Contains(face)) newOption.Add(face);
+                        newOptions.Add(newOption);
+                    }
                 }
             }
+
+            corridorOptions = newOptions;
         }
-    }
 
-    
-    public void FindWallsBetweenRooms()
-    {
-        List<Edge> roomEdges = new List<Edge>();
-
-        foreach(Room room in allRooms)
-        {
-            //room.FindWalls(roomEdges);
-        }
-    }
-
-    public void BFS(Vertex start, Dictionary<Vertex, Vertex> parents,
-        Dictionary<Vertex, int> distances)
-    {
-        // order of vertices
-        Queue<Vertex> queue = new Queue<Vertex>();
-        distances.Add(start, 0);
-        queue.Enqueue(start);
-
-        while (queue.Count > 0)
-        {
-            Vertex v = queue.Dequeue();
-
-            foreach (Edge edge in v.edges)
-            {
-                Vertex other = edge.GetOtherVertex(v);
-
-                if (!distances.ContainsKey(other) || distances[other] == int.MaxValue)
-                {
-                    // current node as parent of neighboring node
-                    if (parents.ContainsKey(other)) parents[other] = v;
-                    else parents.Add(other, v);
-
-                    if (distances.ContainsKey(other)) distances[other] = distances[v] + 1;
-                    else distances.Add(other, distances[v] + 1);
-
-                    queue.Enqueue(other);
-                }
-            }
-        }
-    }
-
-    public void ShortestPath(Vertex start, Vertex end, int count)
-    {
-        Dictionary<Vertex, Vertex> parents = new Dictionary<Vertex, Vertex>(count);
-        Dictionary<Vertex, int> distances = new Dictionary<Vertex, int>(count);
-
-        BFS(start, parents, distances);
-
-        if (!distances.ContainsKey(end)) UnityEngine.Debug.Log("not found");
-        else if (distances[end] == int.MaxValue) UnityEngine.Debug.Log("not found");
-        else
-        {
-            List<Vertex> path = new List<Vertex>();
-            Vertex current = end;
-            path.Add(end);
-            while (!parents.ContainsKey(current))
-            {
-                path.Add(parents[current]);
-                current = parents[current];
-            }
-
-            foreach (Vertex v in path)
-            {
-                v.Recolor(Color.blue);
-            }
-
-//UnityEngine.Debug.Log("Path: " + path.Count);
-        }
+        UnityEngine.Debug.Log("Corridor options: " + corridorOptions.Count);
+        List<List<Face>> fullCorridors = new List<List<Face>>();
 
         
+
+
+        // connect disconnected corridor faces
+        foreach (List<Face> option in corridorOptions)
+        {
+            // find first & last face in the corridor
+            Face firstFace = null, lastFace = null;
+
+            foreach (Face face in option)
+            {
+                if (face.IsAdjacentToRoom(room1))
+                {
+                    firstFace = face;
+                }
+
+                if (face.IsAdjacentToRoom(room2))
+                {
+                    lastFace = face;
+                }
+            }
+
+            if (firstFace == null || lastFace == null)
+            {
+                foreach (Face face in option)
+                {
+                    if (firstFace == null)
+                    {
+                        Face foundFace = face.GetFaceAdjacentToRoom(room1);
+                        if (foundFace != null) firstFace = foundFace;
+                    }
+
+                    if (lastFace == null)
+                    {
+                        Face foundFace = face.GetFaceAdjacentToRoom(room2);
+                        if (foundFace != null) lastFace = foundFace;
+                    }
+                }
+
+                if (!option.Contains(firstFace)) option.Add(firstFace);
+                if (!option.Contains(lastFace)) option.Add(lastFace);
+            }
+
+            Face current = firstFace;
+            List<Face> fullCorridor = new List<Face>();
+
+        // find corridor
+
+           
+        while(current != lastFace)
+        {
+                current.AddWithConnectedFaces(fullCorridor);
+
+            Face next = current.GetNextCorridorFace(option, fullCorridor);
+            if (next == null) next = current.GetNextCorridorFaceFill(option, fullCorridor);
+
+            current = next;
+        }
+            
+                current.AddWithConnectedFaces(fullCorridor);
+            fullCorridors.Add(fullCorridor);
+    }
+
+
+        // pick option
+        // based on which option reduces the rooms the least
+
+        
+        foreach (Face face in fullCorridors[0])
+        {
+            face.Recolor(Color.black);
+        }
+
+        Room newCorridor = new Room(fullCorridors[0], Color.green);
+
+        allRooms.Add(newCorridor);
+    }
+
+    public void ResetWalls()
+    {
+        allRoomWalls.Clear();
+
+        foreach (Room room in allRooms)
+        {
+            room.roomWalls.Clear();
+            room.roomEdges.Clear();
+        }
+
+        foreach(Edge edge in allEdges)
+        {
+            edge.wall = null;
+
+        }
+
+        FindAllWalls();
     }
 
 
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
-        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, MakingCorridors, Completed }
+        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, MakingCorridors, FixingWalls, Completed }
 
     public class Expansion : IComparable<Expansion>
     {

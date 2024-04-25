@@ -46,7 +46,7 @@ public class Vertex : MonoBehaviour
         List<Edge> interiorEdges = new List<Edge>();
 
         foreach (Edge e in edges) { 
-            if (e.IsInteriorWall && e != edge)
+            if (e != edge)
                 interiorEdges.Add(e);
         }
 
@@ -57,7 +57,7 @@ public class Vertex : MonoBehaviour
     {
         foreach (Edge e in edges)
         {
-            if (!e.IsInteriorWall || passedWalls.Contains(e)) continue;
+            if (passedWalls.Contains(e)) continue;
             else
             {
                 passedWalls.Add(e);
