@@ -79,5 +79,16 @@ public class Vertex : MonoBehaviour
         GetComponent<Renderer>().material.color = color;
     }
 
+    public bool IsEdgeOfWall(Wall wall)
+    {
+        int count = 0;
+
+        foreach (Edge edge in edges)
+        {
+            if (edge.wall == wall) count++;
+        }
+
+        return count != 2;
+    }
 
 }

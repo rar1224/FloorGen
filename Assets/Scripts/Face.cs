@@ -198,6 +198,23 @@ public class Face : MonoBehaviour {
         return false;
     }
 
+    public bool IsCorridorEndFace(Room room, List<Face> corridor)
+    {
+        int count = 0;
+
+        foreach(Face face in corridor)
+        {
+            if (face != this && IsAdjacentTo(face)) count++;
+        }
+
+        if(count > 1) return false;
+        else
+        {
+            if (IsAdjacentToRoom(room)) return true;
+            else return false;
+        }
+    }
+
     public Face GetFaceAdjacentToRoom(Room room)
     {
         foreach (Edge edge in edges)
@@ -229,7 +246,7 @@ public class Face : MonoBehaviour {
 
             foreach (Face corridorFace in corridor)
             {
-                if (face.IsAdjacentTo(corridorFace)) return face;
+                if (corridorFace != this && face.IsAdjacentTo(corridorFace)) return face;
             }
             
         }

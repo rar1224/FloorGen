@@ -13,6 +13,7 @@ using Random = UnityEngine.Random;
 public class Generator : MonoBehaviour
 {
     private Status status;
+    public SaveJSON save;
     public GameObject envelope;
 
     public Vertex vertexPrefab;
@@ -169,6 +170,10 @@ public class Generator : MonoBehaviour
         } else if (status == Status.FixingWalls)
         {
             ResetWalls();
+            status++;
+        } else if (status == Status.Saving)
+        {
+            save.SaveIntoJson(allRoomWalls, allRooms);
             status++;
         }
     }
@@ -1082,7 +1087,8 @@ public class Generator : MonoBehaviour
 
         foreach (Room room in allRooms)
         {
-            allRoomWalls.AddRange(room.FindWalls(passedRooms));
+            List<Wall> walls = room.FindWalls(passedRooms);
+            foreach (Wall wall in walls) if (!allRoomWalls.Contains(wall)) allRoomWalls.Add(wall);
             passedRooms.Add(room);
         }
 
@@ -1170,12 +1176,12 @@ public class Generator : MonoBehaviour
 
             foreach (Face face in option)
             {
-                if (face.IsAdjacentToRoom(room1))
+                if (face.IsCorridorEndFace(room1, option))
                 {
                     firstFace = face;
                 }
 
-                if (face.IsAdjacentToRoom(room2))
+                if (face.IsCorridorEndFace(room2, option))
                 {
                     lastFace = face;
                 }
@@ -1205,16 +1211,25 @@ public class Generator : MonoBehaviour
             Face current = firstFace;
             List<Face> fullCorridor = new List<Face>();
 
-        // find corridor
+            // find corridor
+
+            int counter = 0;
 
            
         while(current != lastFace)
         {
+                if (counter > 200) { UnityEngine.Debug.Log("corridor not found"); return; }
+                counter++;
                 current.AddWithConnectedFaces(fullCorridor);
 
             Face next = current.GetNextCorridorFace(option, fullCorridor);
             if (next == null) next = current.GetNextCorridorFaceFill(option, fullCorridor);
 
+            if (next == null)
+                {
+                    UnityEngine.Debug.Log("corridor not found");
+                    return;
+                }
             current = next;
         }
             
@@ -1257,8 +1272,9 @@ public class Generator : MonoBehaviour
     }
 
 
+
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
-        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, MakingCorridors, FixingWalls, Completed }
+        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, MakingCorridors, FixingWalls, Saving, Completed }
 
     public class Expansion : IComparable<Expansion>
     {

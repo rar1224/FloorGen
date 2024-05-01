@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -194,6 +195,8 @@ public class Room
 
         Debug.Log(this.color);
 
+        bool paused = false;
+
         while (next != origin)
         {
             foreach (Edge edge in next.edges)
@@ -203,13 +206,16 @@ public class Room
                     currentEdge = edge;
                     next = currentEdge.GetOtherVertex(next);
 
-                    bool paused = false;
-
                     Room otherRoom = currentEdge.GetOtherRoom(this);
                     if (otherRoom != null && passedRooms.Contains(otherRoom))
                     {
-                        AddWall(currentWall, currentOtherRoom);
-                        currentEdge.Recolor(Color.red);
+                        
+                        if (!paused)
+                        {
+                            AddWall(currentWall, currentOtherRoom);
+                            currentEdge.Recolor(Color.red);
+                        }
+                        
                         currentOtherRoom = otherRoom;
                         paused = true;
                         break;
@@ -230,8 +236,12 @@ public class Room
                             AddWall(currentWall, currentOtherRoom);
                             currentEdge.Recolor(Color.red);
                         }
-                        
+
+                        paused = false;
                         // start new wall
+
+                        //if (next == origin) break;
+
                         currentOtherRoom = otherRoom;
                         Wall newWall = new Wall(this, currentOtherRoom, currentEdge.Direction);
                         newWall.edges.Add(currentEdge);
@@ -246,8 +256,23 @@ public class Room
 
 
         //currentWall.edges.Add(currentEdge);
-        AddWall(currentWall, currentOtherRoom);
+        if (!roomWalls.Contains(currentWall)) AddWall(currentWall, currentOtherRoom);
         //Debug.Log(roomWalls.Count);
+
+        // combine walls that share origin if there is more than 1
+
+        List<Wall> shareOrigin = new List<Wall>();
+        foreach (Wall w in roomWalls)
+        {
+            if (w.FindEnds().Contains(origin)) shareOrigin.Add(w);
+        }
+
+        if (shareOrigin.Count > 1 && shareOrigin[0].IsAligned(shareOrigin[1].edges[0]) && shareOrigin[1].GetOtherRoom(this) == shareOrigin[0].GetOtherRoom(this))
+        {
+                // combine walls into 1
+                shareOrigin[0].edges.AddRange(shareOrigin[1].edges);
+                RemoveWall(shareOrigin[1], shareOrigin[1].GetOtherRoom(this));
+        }
 
         return roomWalls;
 
@@ -276,6 +301,12 @@ public class Room
     {
         roomWalls.Add(wall);
         if (otherRoom != null) otherRoom.roomWalls.Add(wall);
+    }
+
+    public void RemoveWall(Wall wall, Room otherRoom)
+    {
+        roomWalls.Remove(wall);
+        if (otherRoom != null) otherRoom.roomWalls.Remove(wall);
     }
 
     public bool IsAdjacent(Room room)
@@ -428,6 +459,8 @@ public class Wall : IComparable<Wall>
                 }
             }
         }
+
+
     }
 
 
@@ -475,6 +508,19 @@ public class Wall : IComparable<Wall>
         }
 
         return faces;
+    }
+
+    public List<Vertex> FindEnds()
+    {
+        List<Vertex> ends = new List<Vertex>();
+
+        foreach (Edge edge in edges)
+        {
+            if (edge.Vertex1.IsEdgeOfWall(this) && !ends.Contains(edge.Vertex1)) ends.Add(edge.Vertex1);
+            if (edge.Vertex2.IsEdgeOfWall(this) && !ends.Contains(edge.Vertex2)) ends.Add(edge.Vertex2);
+        }
+
+        return ends;
     }
 
     public void Recolor(Color color)
