@@ -5,14 +5,17 @@ using System.Linq;
 using Unity.VisualScripting;
 using UnityEditor.PackageManager.UI;
 using UnityEngine;
+using UnityEngine.UIElements;
 using static UnityEngine.UI.Image;
 
-public class Room
+public class Room : IComparable<Room>
 {
     public float exteriorPreference;
     public Vector2 preferredDirection;
     public float minArea;
     public Color color;
+    public bool corridor = false;
+    public float area;
 
     public bool passedMinArea = false;
     public bool isRectangular = false;
@@ -31,10 +34,11 @@ public class Room
         this.minArea = minArea;
 
         this.color = color;
-        face.GetComponent<Renderer>().material.color = color;
 
         faces = new List<Face>();
         face.SetRoom(this, Vector2.zero);
+
+        GetArea();
 
         this.roomEdges = new List<Edge>();
     }
@@ -50,6 +54,8 @@ public class Room
             face.room = this;
             face.Recolor(color);
         }
+
+        GetArea();
     }
 
     public void AddFace(Face face, Vector2 dir)
@@ -68,6 +74,14 @@ public class Room
         isRectangular = IsRectangular();
         if (isRectangular && passedMinArea) finished = true;
         //if (!isRectangular) finished = true;
+
+        GetArea();
+    }
+    public int CompareTo(Room other)
+    {
+        if (other.area > area) return -1;
+        else if (other.area < area) return 1;
+        else return 0;
     }
 
     public bool IsRectangular()
@@ -103,11 +117,11 @@ public class Room
             if (newCol) columns.Add(face.transform.position.x, 1);
         }
 
-        for(int i = 0; i < rows.Count - 1; i++) { if (rows.ElementAt(i).Value != rows.ElementAt(i + 1).Value) return false; }
-        for (int i = 0; i < columns.Count - 1; i++) { if (columns.ElementAt(i).Value != columns.ElementAt(i + 1).Value) return false; }
-
         currentRows = rows.Count;
         currentCols = columns.Count;
+
+        for (int i = 0; i < rows.Count - 1; i++) { if (rows.ElementAt(i).Value != rows.ElementAt(i + 1).Value) return false; }
+        for (int i = 0; i < columns.Count - 1; i++) { if (columns.ElementAt(i).Value != columns.ElementAt(i + 1).Value) return false; }
 
         return true;
     }
@@ -116,6 +130,14 @@ public class Room
     {
         if (direction == Vector2.left || direction == Vector2.right) return currentRows;
         else return currentCols;
+    }
+
+    public float GetRatio()
+    {
+        IsRectangular();
+
+        if (currentCols > currentRows) return (float) currentRows / (float) currentCols;
+        else return (float) currentCols / (float) currentRows;
     }
 
     public float CalculateNewSquareScore(List<Face> nextFaces)
@@ -167,7 +189,7 @@ public class Room
 
     public List<Wall> FindWalls(List<Room> passedRooms)
     {
-
+        if (faces.Count == 0) return new List<Wall>();
 
         foreach (Face face in faces)
         {
@@ -193,12 +215,19 @@ public class Room
         currentWall.edges.Add(currentEdge);
         currentEdge.wall = currentWall;
 
-        Debug.Log(this.color);
+        int counter = 0;
 
         bool paused = false;
 
         while (next != origin)
         {
+            if (counter > 200)
+            {
+                Debug.Log("can't find walls");
+                return null;
+            }
+
+            counter++;
             foreach (Edge edge in next.edges)
             {
                 if (edge != currentEdge && roomEdges.Contains(edge))
@@ -269,9 +298,11 @@ public class Room
 
         if (shareOrigin.Count > 1 && shareOrigin[0].IsAligned(shareOrigin[1].edges[0]) && shareOrigin[1].GetOtherRoom(this) == shareOrigin[0].GetOtherRoom(this))
         {
-                // combine walls into 1
-                shareOrigin[0].edges.AddRange(shareOrigin[1].edges);
-                RemoveWall(shareOrigin[1], shareOrigin[1].GetOtherRoom(this));
+            // combine walls into 1
+            foreach (Edge edge in shareOrigin[1].edges) edge.wall = shareOrigin[0];
+            shareOrigin[0].edges.AddRange(shareOrigin[1].edges);
+                
+            RemoveWall(shareOrigin[1], shareOrigin[1].GetOtherRoom(this));
         }
 
         return roomWalls;
@@ -333,6 +364,12 @@ public class Room
             List<Room> shortestPath = path;
             int minimum = maxDistance;
 
+            if (shortestPath.Count > maxDistance)
+            {
+                Debug.Log("path not found");
+                return null;
+            }
+
             foreach (Wall wall in roomWalls)
             {
                 Room otherRoom = wall.GetOtherRoom(this);
@@ -355,7 +392,7 @@ public class Room
 
     public float GetArea()
     {
-        float area = 0;
+        area = 0;
 
         foreach(Face face in faces)
         {
@@ -363,6 +400,44 @@ public class Room
         }
 
         return area;
+    }
+
+    public bool IsConnectedWith(Room room)
+    {
+        foreach(Wall wall in roomWalls)
+        {
+            if (wall.door != null && wall.door.rooms.Contains(room)) return true;
+        }
+
+        return false;
+    }
+
+    public Door PlaceInteriorDoor(Room room, float width, Door doorPrefab)
+    {
+        foreach (Wall wall in roomWalls)
+        {
+            if (wall.door == null && wall.rooms.Contains(room)) { return wall.PlaceInteriorDoor(width, doorPrefab); }
+        }
+
+        return null;
+    }
+
+
+    public List<Wall> GetWallsAdjacentTo(Room room)
+    {
+        List<Wall> walls = new List<Wall>();
+
+        foreach(Wall wall in roomWalls)
+        {
+            if (wall.rooms.Contains(room)) walls.Add(wall);
+        }
+
+        return walls;
+    }
+
+    public void Recolor(Color color)
+    {
+        foreach (Face face in faces) face.Recolor(color);
     }
 
 }
@@ -375,6 +450,9 @@ public class Wall : IComparable<Wall>
 
     public List<Room> rooms;
     public List<Wall> adjacentWalls = new List<Wall>();
+    public Door door = null;
+
+    public List<GameObject> objects = new List<GameObject>();
 
     public Vector2 Orientation { get => orientation; }
     public float Length { get => length; }
@@ -425,6 +503,20 @@ public class Wall : IComparable<Wall>
         {
             return false;
         }
+    }
+
+    public void Calculate()
+    {
+        float len = 0;
+        // length of wall
+        foreach (Edge edge in edges)
+        {
+            len += edge.GetLength();
+        }
+
+        length = len;
+
+        orientation = (edges[0].transform.position - edges[0].faces[0].transform.position).normalized;
     }
 
     public bool IsAligned(Edge edge)
@@ -478,6 +570,12 @@ public class Wall : IComparable<Wall>
             List<Wall> shortestPath = path;
             int minimum = maxDistance;
 
+            if (shortestPath.Count > maxDistance)
+            {
+                Debug.Log("path not found");
+                return null;
+            }
+
             foreach (Wall wall in adjacentWalls)
             {
                 if (wall == null || path.Contains(wall)) continue;
@@ -512,6 +610,7 @@ public class Wall : IComparable<Wall>
 
     public List<Vertex> FindEnds()
     {
+        int count = edges.Count;
         List<Vertex> ends = new List<Vertex>();
 
         foreach (Edge edge in edges)
@@ -522,6 +621,28 @@ public class Wall : IComparable<Wall>
 
         return ends;
     }
+
+    public Door PlaceInteriorDoor(float width, Door doorPrefab)
+    {
+        door = UnityEngine.Object.Instantiate(doorPrefab);
+        door.wall = this;
+        door.rooms = rooms;
+
+        Calculate();
+        Edge origin = edges[0];
+
+        List<Vertex> ends = FindEnds();
+        Vertex v = ends[0];
+        Vector3 dir = (ends[1].transform.position - ends[0].transform.position).normalized;
+        door.transform.localScale = new Vector3(width, 0.2f, 1);
+        door.transform.rotation = origin.transform.rotation;
+        door.transform.position = v.transform.position + dir * (length/2);
+
+        objects.Add(door.gameObject);
+
+        return door;
+    }
+
 
     public void Recolor(Color color)
     {
@@ -534,12 +655,12 @@ public class Wall : IComparable<Wall>
 
 public class ExternalWall : Wall
 { 
-    public List<GameObject> objects = new List<GameObject>();
-
     private int maxWindowsNumber = 0;
     public int windowsNumber = 0;
     private bool hasDoor = false;
     private float gap = 0;
+
+
 
     public int MaxWindowsNumber { get => maxWindowsNumber; set => maxWindowsNumber = value; }
 
@@ -552,14 +673,7 @@ public class ExternalWall : Wall
 
     public void Calculate(float windowWidth, float gap)
     {
-        // length of wall
-        foreach(Edge edge in edges)
-        {
-            length += edge.GetLength();
-        }
-
-        // direction to outside
-        orientation = (edges[0].transform.position - edges[0].faces[0].transform.position).normalized;
+        Calculate();
 
         // max number of windows
         maxWindowsNumber = (int)((length - gap) / (windowWidth + gap));
@@ -567,7 +681,7 @@ public class ExternalWall : Wall
 
 
 
-    public void SetupDoor(float doorWidth, float windowWidth, float gap, GameObject doorPrefab)
+    public GameObject SetupDoor(float doorWidth, float windowWidth, float gap, GameObject doorPrefab)
     { 
         this.gap = gap;
         hasDoor = true;
@@ -580,11 +694,14 @@ public class ExternalWall : Wall
 
         // recalculate max number of windows
         maxWindowsNumber = (int) ((length - door.transform.localScale.x - gap * 2) / (windowWidth + gap));
+
+        return door;
     }
 
-    public void SetupWindows(float windowWidth, GameObject windowPrefab)
+    public List<GameObject> SetupWindows(float windowWidth, GameObject windowPrefab)
     {
         // fill the wall with proper number of windows, but don't position them yet
+        List<GameObject> windows = new List<GameObject>();
 
         for (int i = 0; i < windowsNumber; i++)
         {
@@ -592,8 +709,12 @@ public class ExternalWall : Wall
             GameObject window = UnityEngine.Object.Instantiate(windowPrefab);
             window.transform.localScale = new Vector3(windowWidth, 0.2f, 1);
             window.transform.rotation = origin.transform.rotation;
+
             objects.Add(window);
+            windows.Add(window);
         }
+
+        return windows;
     }
     public void SetupAll()
     {

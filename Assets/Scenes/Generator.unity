@@ -179,6 +179,7 @@ MonoBehaviour:
   facePrefab: {fileID: 7448322844994711194, guid: 15c10325c7a98fc4db196e1fd4af0f07, type: 3}
   windowPrefab: {fileID: 6821213665842543422, guid: 3f278f63da14d264b85bf9819a138ff6, type: 3}
   doorPrefab: {fileID: 6830463102735971696, guid: 9c2ab3eda8803a04a8b7673d3be5a3ba, type: 3}
+  interiorDoorPrefab: {fileID: 2163701867924013788, guid: 3079f325e9563074fac61b8e89c846b2, type: 3}
   allVertices: []
   allEdges: []
   allFaces: []
@@ -226,10 +227,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef95d896fd50e6144ad9fc7fccaecb83, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  geometry:
-    vertices: []
-    edges: []
-    faces: []
 --- !u!4 &504105184
 Transform:
   m_ObjectHideFlags: 0

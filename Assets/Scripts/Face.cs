@@ -90,6 +90,27 @@ public class Face : MonoBehaviour {
     {
         connectedFaces.Add(face);
         face.connectedFaces.Add(this);
+
+        foreach (Face connectedFace1 in face.connectedFaces)
+        {
+            if (!connectedFaces.Contains(connectedFace1)) connectedFaces.Add(connectedFace1);
+
+            foreach(Face connectedFace in connectedFaces)
+            {
+                if (!connectedFace.connectedFaces.Contains(connectedFace1)) connectedFace.connectedFaces.Add(connectedFace1);
+            }
+        }
+
+        foreach (Face connectedFace in connectedFaces)
+        {
+            if (!face.connectedFaces.Contains(connectedFace)) face.connectedFaces.Add(connectedFace);
+
+            foreach(Face connectedFace1 in face.connectedFaces)
+            {
+                if (!connectedFace1.connectedFaces.Contains(connectedFace)) connectedFace1.connectedFaces.Add(connectedFace);
+            }
+        }
+        
         if (forFrontDoor) { hasFrontDoor = true; face.hasFrontDoor = true; }
         else { hasWindows = true; face.hasWindows = true; }
 
@@ -220,7 +241,7 @@ public class Face : MonoBehaviour {
         foreach (Edge edge in edges)
         {
             Face face = edge.GetOtherFace(this);
-            if (face.IsAdjacentToRoom(room)) return face;
+            if (face != null && face.IsAdjacentToRoom(room)) return face;
         }
 
         return null;
