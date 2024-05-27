@@ -1,20 +1,26 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class RoomType
 {
+    public string name;
     List<Vector2> orientations = new List<Vector2>();
-    int sizeIndex;
-    int wallLengthIndex;
-    int minWindows;
+    int minSizeIndex;
+    int maxSizeIndex;
 
-    public RoomType(List<Vector2> orientations, int sizeIndex, int wallLengthIndex, int minWindows)
+    int maxWallLengthIndex;
+    bool needsWindows;
+
+    public RoomType(string name, List<Vector2> orientations, int minSizeIndex, int maxSizeIndex, int maxWallLengthIndex, bool needsWindows)
     {
+        this.name = name;
         this.orientations = orientations;
-        this.sizeIndex = sizeIndex;
-        this.wallLengthIndex = wallLengthIndex;
-        this.minWindows = minWindows;
+        this.minSizeIndex = minSizeIndex;
+        this.maxSizeIndex = maxSizeIndex;
+        this.maxWallLengthIndex = maxWallLengthIndex;
+        this.needsWindows = needsWindows;
     }
 
     public int GetScore(Room room, List<Room> roomsToDefine)
@@ -24,8 +30,14 @@ public class RoomType
 
         foreach(Vector2 orientation in orientations) if (room.outOrientations.ContainsKey(orientation)) { score++; }
 
-        if (roomsToDefine.IndexOf(room) > sizeIndex) { score++; }
+        if (roomsToDefine.IndexOf(room) >= minSizeIndex && roomsToDefine.IndexOf(room) <= maxSizeIndex) { score++; }
 
+        roomsToDefine = roomsToDefine.OrderBy(room => room.wallLength).ToList();
 
+        if (roomsToDefine.IndexOf(room) < maxWallLengthIndex) { score++;  }
+
+        if (needsWindows && !room.HasWindows()) { score = score - 5; }
+
+        return score;
     }
 }

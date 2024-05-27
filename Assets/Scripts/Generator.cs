@@ -4,6 +4,7 @@ using System.Linq;
 using Unity.VisualScripting;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
+using UnityEngine.SocialPlatforms.Impl;
 using Random = UnityEngine.Random;
 
 
@@ -1376,11 +1377,10 @@ public class Generator : MonoBehaviour
 
         // pick option
         // based on which option reduces the rooms the least
-
-        
-        foreach (Face face in fullCorridors[0])
+        if (fullCorridors.Count == 0)
         {
-            face.Recolor(Color.black);
+            UnityEngine.Debug.Log("corridor not found");
+            return null;
         }
 
         bool corridorValid = true;
@@ -1637,59 +1637,37 @@ public class Generator : MonoBehaviour
             roomsToDefine[3].name = "living_room";
         }
 
-        foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
+        List<RoomType> types = new List<RoomType> {
+            new RoomType("bathroom", new List<Vector2> {Vector2.down, Vector2.right}, 0, 1, 1, false),
+            new RoomType("living_room", new List<Vector2> {Vector2.down, Vector2.right}, 1, 3, 2, true),
+            new RoomType("bedroom", new List<Vector2> { Vector2.up, Vector2.left }, 1, 3, 3, true),
+            new RoomType("kitchen", new List<Vector2> { Vector2.up, Vector2.left }, 0, 2, 3, true)
+        };
 
-        /*
+        List<Room> leftToDefine = new List<Room>();
+        leftToDefine.AddRange(roomsToDefine);
 
-        // if no windows it's a bathroom
-
-        if (!orientations.ElementAt(0).Key.HasWindows())
+        foreach(RoomType type in types)
         {
-            orientations.ElementAt(0).Key.name = "bathroom";
-            orientations.ElementAt(1).Key.name = "kitchen";
-        } else if (!orientations.ElementAt(1).Key.HasWindows())
-        {
-            orientations.ElementAt(1).Key.name = "bathroom";
-            orientations.ElementAt(0).Key.name = "kitchen";
-        }
-        else
-        {
-            // 4 rooms left
+            Room chosen = leftToDefine[0];
+            int highScore = -10;
 
-            // room 3 (4) : kitchen if 3 significantly bigger than 4, or north/west
-            KeyValuePair<Room, Vector2> option3 = orientations.ElementAt(1);
-            KeyValuePair<Room, Vector2> option4 = orientations.ElementAt(0);
-
-            if (option3.Key.GetArea() > option4.Key.GetArea() * 1.5 || option3.Value == Vector2.up || option3.Value == Vector2.left)
+            foreach(Room room in leftToDefine)
             {
-                option3.Key.name = "kitchen";
-                option4.Key.name = "bathroom";
-            }
-            else
-            {
-                option4.Key.name = "kitchen";
-                option3.Key.name = "bathroom";
+                int score = type.GetScore(room, roomsToDefine);
+                if (score > highScore)
+                {
+                    chosen = room;
+                    highScore = score;
+                }
             }
 
+            leftToDefine.Remove(chosen);
+            chosen.name = type.name;
         }
 
-        // room 1 & 2 : living room if 1 south/east, bedroom otherwise
-        KeyValuePair<Room, Vector2> option1 = orientations.ElementAt(3);
-        KeyValuePair<Room, Vector2> option2 = orientations.ElementAt(2);
-
-        if (option1.Value == Vector2.down || option1.Value == Vector2.right)
-        {
-            option1.Key.name = "living_room";
-            option2.Key.name = "bedroom";
-        }
-        else
-        {
-            option1.Key.name = "bedroom";
-            option2.Key.name = "living_room";
-        }
 
         foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
-        */
     }
 
     public void ResetRooms()

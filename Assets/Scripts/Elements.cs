@@ -16,6 +16,7 @@ public class Room : IComparable<Room>
     public Color color;
     public bool corridor = false;
     public float area;
+    public float wallLength;
 
     public bool isRectangular = false;
     public bool finished = false;
@@ -302,6 +303,14 @@ public class Room : IComparable<Room>
             shareOrigin[0].edges.AddRange(shareOrigin[1].edges);
                 
             RemoveWall(shareOrigin[1], shareOrigin[1].GetOtherRoom(this));
+        }
+
+        wallLength = 0f;
+
+        foreach(Wall w in roomWalls)
+        {
+            w.Calculate();
+            wallLength += w.Length;
         }
 
         return roomWalls;
