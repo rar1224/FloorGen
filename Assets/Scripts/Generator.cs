@@ -1,20 +1,19 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Xml;
-using Unity.Burst.Intrinsics;
 using Unity.VisualScripting;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using UnityEngine.UIElements;
 using Random = UnityEngine.Random;
+
 
 public class Generator : MonoBehaviour
 {
     private Status status;
     public SaveJSON save;
     public GameObject envelope;
+    public bool optimize;
+    public bool rectangleExpansion;
 
     public Vertex vertexPrefab;
     public Edge edgePrefab;
@@ -74,9 +73,9 @@ public class Generator : MonoBehaviour
 
     private void FixedUpdate()
     {
-        float windowWidth = 0.8f;
-        float frontDoorWidth = 2f;
-        float interiorDoorWidth = 1f;
+        float windowWidth = 1f;
+        float frontDoorWidth = 3f;
+        float gap = 0.5f;
 
         if (status == Status.DividingOnAngles)
         {
@@ -94,7 +93,7 @@ public class Generator : MonoBehaviour
             // dividing envelope into smaller cells
 
 
-            startLoop = DivideToCells(2f, 2f, true, true);
+            startLoop = DivideToCells(2.8f, 2.8f, true, true);
             status++;
             return;
 
@@ -112,7 +111,7 @@ public class Generator : MonoBehaviour
             else status++;
 
 
-        }
+        } 
         else if (status == Status.FindingFaces)
         {
             foreach (Vertex v in allVertices)
@@ -121,7 +120,7 @@ public class Generator : MonoBehaviour
                 if (face != null) allFaces.Add(face);
             }
 
-            FindWalls(1, 0.5f);
+            FindWalls(windowWidth, gap);
 
             status++;
         }
@@ -129,11 +128,11 @@ public class Generator : MonoBehaviour
         {
             // placing windows and doors
 
-            allDoors.Add(PlaceFrontDoor(Vector2.up, frontDoorWidth, 1, 0.5f));
-            allWindows.AddRange(PlaceWindows(10, windowWidth, 0.5f));
+            allDoors.Add(PlaceFrontDoor(frontDoorWidth, windowWidth, gap, optimize));
+            allWindows.AddRange(PlaceWindows(7, windowWidth, gap, optimize));
 
             status++;
-        }
+        } 
         else if (status == Status.ConnectingSharingCells)
         {
             foreach (ExternalWall wall in allWalls)
@@ -147,7 +146,6 @@ public class Generator : MonoBehaviour
         else if (status == Status.MakingRooms)
         {
             SetupRoomsFull();
-            //SetupRoomsRandom();
             status++;
         } 
         else if (status == Status.ExpandingRooms) {
@@ -160,7 +158,7 @@ public class Generator : MonoBehaviour
 
             if (counter == 0) status++;
 
-        }
+        } 
         else if (status == Status.FillingGaps)
         {
             FillIslands();
@@ -172,31 +170,50 @@ public class Generator : MonoBehaviour
 
             //UnityEngine.Debug.Log("Room walls: " + allRooms[4].roomWalls.Count);
 
-            MakeCorridor(allRooms[0], allRooms[allRooms.Count - 1]);
-            //MakeAllCorridors();
+            //MakeCorridor(allRooms[0], allRooms[allRooms.Count - 1]);
+            MakeAllCorridors();
 
             status++;
 
         }  else if (status == Status.FixingWalls)
         {
             ResetWalls();
+            FindAllWalls();
             status++;
 
             ResetExteriorObjects();
 
-            UnityEngine.Debug.Log(CheckValidity(3f));
-        }  /*else if (status == Status.PlacingInteriorDoors)
-        {
-            
-            allDoors.AddRange(PlaceInteriorDoors(interiorDoorWidth));
-            status++;
+            if (optimize)
+            {
+                if (!CheckValidity(3f))
+                {
+                    ResetRooms();
+                    status = Status.MakingRooms;
+                }
+                else
+                {
+                    DefineRoomsOptimize();
+                }
+            } else
+            {
+                if (!CheckValidity(3f))
+                {
+                    ResetRooms();
+                    status = Status.MakingRooms;
+                }
+                else
+                {
+                    DefineRoomsOptimize();
+                }
+            }  
+
         } 
         else if (status == Status.Saving)
         {
-            ResetExteriorObjects();
-            save.SaveIntoJson(allRoomWalls, allRooms, windowWidth, frontDoorWidth, interiorDoorWidth);
+            //ResetExteriorObjects();
+            save.SaveIntoJson(allRoomWalls, allRooms, windowWidth, frontDoorWidth);
             status++;
-        } */
+        } 
     }
 
     public void DivideCurrentLoop()
@@ -514,8 +531,14 @@ public class Generator : MonoBehaviour
     }
 
 
-    public GameObject PlaceFrontDoor(Vector2 direction, float doorWidth, float windowWidth, float gap)
+    public GameObject PlaceFrontDoor(float doorWidth, float windowWidth, float gap, bool optimize)
     {
+        Vector2 direction;
+
+        if (!optimize) direction = directions[Random.Range(0, directions.Length)];
+        else direction = directions[Random.Range(0, 2) * 2 + 1];
+
+
         // pick longest wall on correct side of building
         List<ExternalWall> possibleWalls = new List<ExternalWall>();
 
@@ -531,7 +554,7 @@ public class Generator : MonoBehaviour
         return wall.SetupDoor(doorWidth, windowWidth, gap, doorPrefab);
     }
 
-    public List<GameObject> PlaceWindows(int number, float width, float gap)
+    public List<GameObject> PlaceWindows(int number, float width, float gap, bool optimize)
     {
         // directions and numbers of windows that can be placed on each
         // all walls for each direction (north, south...) counted together
@@ -539,7 +562,6 @@ public class Generator : MonoBehaviour
         List<GameObject> windows = new List<GameObject>();
 
         List<ExternalDirection> externalDirections = new List<ExternalDirection>();
-        float maxRange = 0;
 
         for (int i = 0; i < 4; i++)
         {
@@ -559,29 +581,37 @@ public class Generator : MonoBehaviour
                 possibleNumber += windowsNumber;
             }
 
-            ExternalDirection ext = new ExternalDirection(directions[i], possibleWalls, possibleNumber, 1);
+            ExternalDirection ext = new ExternalDirection(directions[i], possibleWalls, possibleNumber, 0.2f);
 
             // optimization
-            if (directions[i] == Vector2.up || directions[i] == Vector2.down) ext.weight = 2;
+            if (optimize)
+            {
+                if (directions[i] == Vector2.up || directions[i] == Vector2.down) ext.preference = 1;
+            } else
+            {
+                ext.preference = 1;
+            }
+            
 
             externalDirections.Add(ext);
-            maxRange += ext.preference;
         }
 
 
         // calculate how many windows should be placed on each wall direction
-        externalDirections.Sort();
+
         
 
-        for(int i = 0; i < number; i++)
+
+        for (int i = 0; i < number; i++)
         {
+            externalDirections = externalDirections.OrderBy(x => Random.Range(0, Int32.MaxValue)).ToList();
+
             ExternalDirection chosen = null;
-            float rand = Random.Range(0, maxRange);
+            float rand = Random.Range(0.0f, 1.0f);
 
             foreach (ExternalDirection ext in externalDirections)
             {
                 if (ext.preference > rand) { chosen = ext; break; }
-                else rand -= ext.preference;
             }
 
             if (chosen.setNumber < chosen.possibleNumber) chosen.setNumber++;
@@ -640,7 +670,7 @@ public class Generator : MonoBehaviour
             }
         }
 
-        Room entrance = new Room(3, entranceFace, Random.ColorHSV());
+        Room entrance = new Room(1000, entranceFace, Random.ColorHSV());
         entrance.corridor = true;
 
         //UnityEngine.Debug.Log("room face " + face.transform.position);
@@ -648,7 +678,6 @@ public class Generator : MonoBehaviour
 
 
         int number = 4;
-        int spread = exteriorFaces.Count / number;
 
         for (int i = 0; i < number; i++)
         {
@@ -656,7 +685,7 @@ public class Generator : MonoBehaviour
             int add = 0; 
             while (face == null)
             {
-                face = exteriorFaces[spread * i + add];
+                face = exteriorFaces[Random.Range(0, exteriorFaces.Count)];
                 // optimization (validity)
                 if (face.room != null) { add++; face = null; }
             }
@@ -690,11 +719,12 @@ public class Generator : MonoBehaviour
 
         
         // entrance room
-        Room entrance = new Room(10, entranceFace, new Color(0.43f, 0.82f, 0.16f));
+        Room entrance = new Room(2, entranceFace, Color.green);
         entrance.corridor = true;
         allRooms.Add(entrance);
 
         // other rooms
+        int index = Random.Range(0, exteriorFaces.Count);
 
         List<Face> chosenFaces = new List<Face>();
 
@@ -705,7 +735,7 @@ public class Generator : MonoBehaviour
             while (face == null)
             {
                 //face = exteriorFaces[Random.Range(0, exteriorFaces.Count)];
-                face = exteriorFaces[spread * i + add];
+                face = exteriorFaces[(index + spread * i + add) % exteriorFaces.Count];
                 if (face.room != null || chosenFaces.Contains(face)) { add++; face = null; }
                 else
                 {
@@ -719,14 +749,14 @@ public class Generator : MonoBehaviour
             chosenFaces.Add(face);
         }
 
-        Room livingRoom = new Room(100, chosenFaces[0], Color.yellow);
-        Room bedroom = new Room(100, chosenFaces[1], Color.cyan);
-        Room bathroom = new Room(100, chosenFaces[2], Color.gray);
-        Room kitchen = new Room(100, chosenFaces[3], Color.magenta);
-        allRooms.Add(livingRoom);
-        allRooms.Add(bedroom);
-        allRooms.Add(bathroom);
-        allRooms.Add(kitchen);
+        Room r1 = new Room(100, chosenFaces[0], Color.yellow);
+        Room r2 = new Room(100, chosenFaces[1], Color.cyan);
+        Room r3 = new Room(100, chosenFaces[2], Color.gray);
+        Room r4 = new Room(100, chosenFaces[3], Color.magenta);
+        allRooms.Add(r1);
+        allRooms.Add(r2);
+        allRooms.Add(r3);
+        allRooms.Add(r4);
     }
 
     public int ExpandRooms()
@@ -737,7 +767,13 @@ public class Generator : MonoBehaviour
 
         foreach (Room room in allRooms)
         {
-            if(ExpandRoomSideways(room)) expanded++;
+            bool e = false;
+            if (rectangleExpansion) {
+                e = ExpandRoomSideways(room);
+                    }
+            else e = ExpandRoom(room);
+
+            if(e) expanded++;
         }
 
         return expanded;
@@ -1151,9 +1187,9 @@ public class Generator : MonoBehaviour
         // make the entrance connect to every room
 
         List<Room> corridors = new List<Room>();
+        Room entrance = null;
 
-        Room entrance = allRooms[0];
-        corridors.Add(entrance);
+        foreach (Room room in allRooms) if (room.corridor) { corridors.Add(room); entrance = room; }
 
         int counter = 0;
 
@@ -1161,6 +1197,7 @@ public class Generator : MonoBehaviour
         {
             counter++;
             Room newCorridor = null;
+            bool allConnected = true;
 
             foreach (Room room in allRooms)
             {
@@ -1179,20 +1216,21 @@ public class Generator : MonoBehaviour
 
                 if (!connectedToCorridor)
                 {
-                    newCorridor = MakeCorridor(room, entrance);
+                    newCorridor = MakeCorridor(room, corridors.LastOrDefault());
+                    corridors.Add(newCorridor);
+                    allConnected = false;
                     break;
-
                 }
             }
 
-            if (newCorridor == null)
+            if (allConnected)
+            {
+                UnityEngine.Debug.Log("new corridors not needed");
+                return;
+            } else if (newCorridor == null)
             {
                 UnityEngine.Debug.Log("can't find corridor");
                 return;
-            }
-            else
-            {
-                corridors.Add(newCorridor);
             }
         }
 
@@ -1388,7 +1426,6 @@ public class Generator : MonoBehaviour
 
         }
 
-        FindAllWalls();
     }
 
     public List<GameObject> PlaceInteriorDoors(float width)
@@ -1487,7 +1524,9 @@ public class Generator : MonoBehaviour
 
     public bool CheckValidity(float minArea)
     {
+        int index = 0;
         int counter = 0;
+        allRooms.Sort();
 
         foreach(Room room in allRooms)
         {
@@ -1499,7 +1538,6 @@ public class Generator : MonoBehaviour
             // ratio
             if (room.GetRatio() < 0.5)
             {
-                UnityEngine.Debug.Log(room.color + " " + room.GetRatio());
                 return false;
             }
 
@@ -1518,20 +1556,159 @@ public class Generator : MonoBehaviour
 
             if (!hasWindows)
             {
-                UnityEngine.Debug.Log(room.color);
-                if (counter == 1) return false;
+                if (counter == 1 || index > 1) return false;
                 else counter++;
             }
+
+            index++;
         }
 
         return true;
+    }
+
+    public void DefineRooms()
+    {
+        allRooms.Sort();
+
+        int corridorNr = 0;
+        int nameIndex = 0;
+        List<string> roomNames = new List<string>{"bathroom", "kitchen", "bedroom", "living_room"};
+
+        foreach(Room room in allRooms)
+        {
+            if (room.corridor)
+            {
+                room.name = "corridor" + corridorNr++;
+            } else
+            {
+                room.name = roomNames[nameIndex++];
+            }
+
+            UnityEngine.Debug.Log(room.color + " " + room.name);
+        }
+    }
+
+    public void DefineRoomsOptimize()
+    {
+        allRooms.Sort();
+        List<string> definitions = new List<string> { "living_room", "bedroom", "kitchen", "bathroom" };
+        List<Room> roomsToDefine = new List<Room>();
+
+        foreach (Room room in allRooms)
+        {
+            if (!room.corridor)
+            {
+                roomsToDefine.Add(room);
+                room.CalculateWallOrientation();
+            } else
+            {
+                room.name = "corridor";
+            }
+        }
+
+        if (!roomsToDefine[0].HasWindows())
+        {
+            roomsToDefine[0].name = "bathroom";
+            roomsToDefine[1].name = "kitchen";
+        } else if (!roomsToDefine[1].HasWindows())
+        {
+            roomsToDefine[1].name = "bathroom";
+            roomsToDefine[0].name = "kitchen";
+        } else if(roomsToDefine[0].outOrientations.ContainsKey(Vector2.down)
+            || roomsToDefine[0].outOrientations.ContainsKey(Vector2.right))
+        {
+            roomsToDefine[0].name = "bathroom";
+            roomsToDefine[1].name = "kitchen";
+        } else
+        {
+            roomsToDefine[1].name = "bathroom";
+            roomsToDefine[0].name = "kitchen";
+        }
+
+        if (roomsToDefine[3].outOrientations.ContainsKey(Vector2.up) ||
+            roomsToDefine[3].outOrientations.ContainsKey(Vector2.left))
+        {
+            roomsToDefine[3].name = "bedroom";
+            roomsToDefine[2].name = "living_room";
+        }
+        else
+        {
+            roomsToDefine[2].name = "bedroom";
+            roomsToDefine[3].name = "living_room";
+        }
+
+        foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
+
+        /*
+
+        // if no windows it's a bathroom
+
+        if (!orientations.ElementAt(0).Key.HasWindows())
+        {
+            orientations.ElementAt(0).Key.name = "bathroom";
+            orientations.ElementAt(1).Key.name = "kitchen";
+        } else if (!orientations.ElementAt(1).Key.HasWindows())
+        {
+            orientations.ElementAt(1).Key.name = "bathroom";
+            orientations.ElementAt(0).Key.name = "kitchen";
+        }
+        else
+        {
+            // 4 rooms left
+
+            // room 3 (4) : kitchen if 3 significantly bigger than 4, or north/west
+            KeyValuePair<Room, Vector2> option3 = orientations.ElementAt(1);
+            KeyValuePair<Room, Vector2> option4 = orientations.ElementAt(0);
+
+            if (option3.Key.GetArea() > option4.Key.GetArea() * 1.5 || option3.Value == Vector2.up || option3.Value == Vector2.left)
+            {
+                option3.Key.name = "kitchen";
+                option4.Key.name = "bathroom";
+            }
+            else
+            {
+                option4.Key.name = "kitchen";
+                option3.Key.name = "bathroom";
+            }
+
+        }
+
+        // room 1 & 2 : living room if 1 south/east, bedroom otherwise
+        KeyValuePair<Room, Vector2> option1 = orientations.ElementAt(3);
+        KeyValuePair<Room, Vector2> option2 = orientations.ElementAt(2);
+
+        if (option1.Value == Vector2.down || option1.Value == Vector2.right)
+        {
+            option1.Key.name = "living_room";
+            option2.Key.name = "bedroom";
+        }
+        else
+        {
+            option1.Key.name = "bedroom";
+            option2.Key.name = "living_room";
+        }
+
+        foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
+        */
+    }
+
+    public void ResetRooms()
+    {
+        ResetWalls();
+
+        foreach(Face face in allFaces)
+        {
+            face.room = null;
+        }
+
+        allRooms.Clear();
     }
 
 
 
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
         FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps,
-        MakingCorridors, FixingWalls, PlacingInteriorDoors, Saving, Completed }
+        MakingCorridors, FixingWalls, Saving, Completed }
 
     public class Expansion : IComparable<Expansion>
     {
@@ -1591,17 +1768,15 @@ public class Generator : MonoBehaviour
         public Vector2 direction;
         public List<ExternalWall> possibleWalls;
         public int possibleNumber;
-        public float weight;
         public float preference;
         public int setNumber;
 
-        public ExternalDirection(Vector2 direction, List<ExternalWall> possibleWalls, int possibleNumber, float weight)
+        public ExternalDirection(Vector2 direction, List<ExternalWall> possibleWalls, int possibleNumber, float preference)
         {
             this.direction = direction;
             this.possibleWalls = possibleWalls;
             this.possibleNumber = possibleNumber;
-            this.weight = weight;
-            preference = weight * possibleNumber;
+            this.preference = preference;
             setNumber = 0;
         }
 

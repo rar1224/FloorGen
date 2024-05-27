@@ -17,10 +17,10 @@ public class Room : IComparable<Room>
     public bool corridor = false;
     public float area;
 
-    public bool passedMinArea = false;
     public bool isRectangular = false;
     public bool finished = false;
     public Vector2 lastDirection = Vector2.zero;
+    public string name;
 
     public List<Face> faces;
     public int currentRows = 0;
@@ -28,6 +28,8 @@ public class Room : IComparable<Room>
 
     public List<Wall> roomWalls = new List<Wall>();
     public List<Edge> roomEdges = new List<Edge>();
+
+    public Dictionary<Vector2, int> outOrientations = new Dictionary<Vector2, int>();
 
     public Room(float minArea, Face face, Color color)
     {
@@ -70,12 +72,9 @@ public class Room : IComparable<Room>
         // Debug
         //if (faces.Count > 100) finished = true;
 
-        if (GetArea() >= minArea) passedMinArea = true;
+        if (GetArea() >= minArea) finished = true;
         isRectangular = IsRectangular();
-        if (isRectangular && passedMinArea) finished = true;
         //if (!isRectangular) finished = true;
-
-        GetArea();
     }
     public int CompareTo(Room other)
     {
@@ -435,6 +434,55 @@ public class Room : IComparable<Room>
         return walls;
     }
 
+    public void CalculateWallOrientation()
+    {
+        Dictionary<Vector2, int> directions = new Dictionary<Vector2, int> { { Vector2.right, 0 }, { Vector2.down, 0 }, { Vector2.left, 0 }, { Vector2.up, 0 } };
+
+        foreach (Wall wall in roomWalls)
+        {
+            if (wall.GetOtherRoom(this) == null)
+            {
+                foreach (KeyValuePair<Vector2, int> keyValuePair in directions)
+                {
+                    if (keyValuePair.Key == wall.GetExteriorDirection())
+                    {
+                        directions[keyValuePair.Key] += wall.edges.Count;
+                        break;
+                    }
+                }
+            }
+        }
+
+        int count = 0;
+
+        outOrientations = directions.OrderBy(pair => pair.Value).ToDictionary(pair => pair.Key, pair => count++);
+
+        outOrientations.Remove(outOrientations.Keys.FirstOrDefault());
+        outOrientations.Remove(outOrientations.Keys.FirstOrDefault());
+    }
+
+    public bool HasWindows()
+    {
+        foreach(Face face in faces)
+        {
+            if (face.hasWindows) return true;
+        }
+
+        return false;
+    }
+
+    public float GetExteriorWallLength()
+    {
+        float length = 0;
+
+        foreach (Wall wall in roomWalls)
+        {
+            if (wall.edges[0].IsExterior) length += wall.Length;
+        }
+
+        return length;
+    }
+
     public void Recolor(Color color)
     {
         foreach (Face face in faces) face.Recolor(color);
@@ -503,6 +551,11 @@ public class Wall : IComparable<Wall>
         {
             return false;
         }
+    }
+
+    public Vector2 GetExteriorDirection()
+    {
+        return (edges[0].transform.position - edges[0].faces[0].transform.position).normalized;
     }
 
     public void Calculate()
@@ -642,6 +695,7 @@ public class Wall : IComparable<Wall>
 
         return door;
     }
+
 
 
     public void Recolor(Color color)

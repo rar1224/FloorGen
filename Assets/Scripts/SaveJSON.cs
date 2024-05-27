@@ -5,7 +5,7 @@ using UnityEngine;
 public class SaveJSON : MonoBehaviour
 {
     public void SaveIntoJson(List<Wall> walls, List<Room> rooms,
-        float windowWidth, float frontDoorWidth, float interiorDoorWidth)
+        float windowWidth, float frontDoorWidth)
     {
         int vertexIndex = 0;
         int edgeIndex = 0;
@@ -81,29 +81,18 @@ public class SaveJSON : MonoBehaviour
                         {
                             DoorJS door = new DoorJS();
                             door.id = "o" + objIndex;
-                            door.door_definition_id = "dd0";
+                            door.door_definition_id = "Door_0";
                             door.edge_id = edge.id;
                             door.name = "Door " + objIndex;
                             door.alpha = (obj.transform.position - ends[0].transform.position).magnitude / wall.Length;
                             doors.Add(door);
                             objIndex++;
 
-                        } else if (obj.tag == "InteriorDoor")
-                        {
-                            DoorJS door = new DoorJS();
-                            door.id = "o" + objIndex;
-                            door.door_definition_id = "dd1";
-                            door.edge_id = edge.id;
-                            door.name = "Door " + objIndex;
-                            door.alpha = (obj.transform.position - ends[0].transform.position).magnitude / wall.Length;
-                            doors.Add(door);
-                            objIndex++;
-
-                        } else
+                        }  else
                         {
                             WindowJS window = new WindowJS();
                             window.id = "o" + objIndex;
-                            window.window_definition_id = "wd0";
+                            window.window_definition_id = "Window_0";
                             window.edge_id = edge.id;
                             window.name = "Window " + objIndex;
                             window.alpha = (obj.transform.position - ends[0].transform.position).magnitude / wall.Length;
@@ -132,8 +121,29 @@ public class SaveJSON : MonoBehaviour
             space.color = "#" + ColorUtility.ToHtmlStringRGB(room.color);
             space.face_id = face.id;
 
-            if (room.corridor) space.thermal_zone_id = "z0";
-            else space.thermal_zone_id = "z1";
+            switch(room.name)
+            {
+                case "living_room":
+                    space.space_type_id = "Living_Room";
+                    space.thermal_zone_id = "Living_Zone";
+                    break;
+                case "bathroom":
+                    space.space_type_id = "Bathroom";
+                    space.thermal_zone_id = "Bathroom_Zone";
+                    break;
+                case "bedroom":
+                    space.space_type_id = "Bedroom";
+                    space.thermal_zone_id = "Bedroom_Zone";
+                    break;
+                case "kitchen":
+                    space.space_type_id = "Kitchen";
+                    space.thermal_zone_id = "Kitchen_Zone";
+                    break;
+                default:
+                    space.space_type_id = "Corridors";
+                    space.thermal_zone_id = "Corridor_Zone";
+                    break;
+            }
 
             spaces.Add(space);
 
@@ -172,50 +182,22 @@ public class SaveJSON : MonoBehaviour
 
         List<WindowDefinitionJS> window_definitions = new List<WindowDefinitionJS>();
         WindowDefinitionJS windowDef = new WindowDefinitionJS();
-        windowDef.id = "wd0";
-        windowDef.name = "Window Def 0";
+        windowDef.id = "Window_0";
+        windowDef.name = "Window 0";
         windowDef.width = windowWidth;
         window_definitions.Add(windowDef);
 
         List<DoorDefinitionJS> door_definitions = new List<DoorDefinitionJS>();
         DoorDefinitionJS frontDoor = new DoorDefinitionJS();
-        frontDoor.id = "dd0";
-        frontDoor.name = "Front Door Def";
+        frontDoor.id = "Door_0";
+        frontDoor.name = "Door 0";
         frontDoor.width = frontDoorWidth;
         door_definitions.Add(frontDoor);
-
-        DoorDefinitionJS interiorDoor = new DoorDefinitionJS();
-        interiorDoor.id = "dd1";
-        interiorDoor.name = "Interior Door Def";
-        interiorDoor.width = interiorDoorWidth;
-        door_definitions.Add(interiorDoor);
-
-        List<ConstructionSetJS> construction_sets = new List<ConstructionSetJS>();
-        ConstructionSetJS con = new ConstructionSetJS();
-        con.id = "cs0";
-        con.name = "Construction Set 0";
-        con.color = "#88ccee";
-        construction_sets.Add(con);
-
-        List<ThermalZoneJS> thermal_zones = new List<ThermalZoneJS>();
-        ThermalZoneJS corridorZone = new ThermalZoneJS();
-        corridorZone.id = "z0";
-        corridorZone.name = "Corridor Zone";
-        corridorZone.color = "#88ccee";
-        thermal_zones.Add(corridorZone);
-
-        ThermalZoneJS roomZone = new ThermalZoneJS();
-        roomZone.id = "z1";
-        roomZone.name = "Room Zone";
-        roomZone.color = "#332288";
-        thermal_zones.Add(roomZone);
 
         FullJS full = new FullJS();
         full.stories = stories;
         full.door_definitions = door_definitions;
         full.window_definitions = window_definitions;
-        full.construction_sets = construction_sets;
-        full.thermal_zones = thermal_zones;
 
         string json = JsonUtility.ToJson(full);
 
@@ -229,8 +211,6 @@ public class FullJS
     public List<StoryJS> stories = new List<StoryJS>();
     public List<WindowDefinitionJS> window_definitions = new List<WindowDefinitionJS>();
     public List<DoorDefinitionJS> door_definitions = new List<DoorDefinitionJS>();
-    public List<ConstructionSetJS> construction_sets = new List<ConstructionSetJS>();
-    public List<ThermalZoneJS> thermal_zones = new List<ThermalZoneJS>();
 }
 
 [System.Serializable]
@@ -239,7 +219,7 @@ public class StoryJS
     public string id = "1";
     public string name = "Story 1";
     public string color = "#88ccee";
-    public int floor_to_ceiling_height = 8;
+    public int floor_to_ceiling_height = 3;
     public int multiplier = 1;
     public GeometryJS geometry;
     public List<SpaceJS> spaces = new List<SpaceJS>();
@@ -263,9 +243,10 @@ public class SpaceJS
     public string name;
     public string face_id;
     public string color;
-    public string type = "space";
-    public string construction_set_id = "cs0";
+    public string space_type_id;
+    public string construction_set_id = "Construction_Set_0";
     public string thermal_zone_id;
+    public string type = "space";
 }
 
 [System.Serializable]
@@ -305,23 +286,6 @@ public class DoorDefinitionJS
     public string name;
     public float height = 1;
     public float width;
-}
-
-[System.Serializable]
-public class ConstructionSetJS
-{
-    public string id;
-    public string name;
-    public string color;
-}
-
-[System.Serializable]
-public class ThermalZoneJS
-{
-    public string id;
-    public string name;
-    public string color;
-    public string type = "thermal_zones";
 }
 
 [System.Serializable]
