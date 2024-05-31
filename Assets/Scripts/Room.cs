@@ -2,6 +2,7 @@ using JetBrains.Annotations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEditor.PackageManager.UI;
 using UnityEngine;
@@ -132,12 +133,27 @@ public class Room : IComparable<Room>
         else return currentCols;
     }
 
-    public float GetRatio()
+    public float GetCellRatio()
     {
         IsRectangular();
 
-        if (currentCols > currentRows) return (float) currentRows / (float) currentCols;
-        else return (float) currentCols / (float) currentRows;
+        if (currentCols > currentRows) return (float)currentRows / (float)currentCols;
+        else return (float)currentCols / (float)currentRows;
+    }
+
+    public float GetRatio()
+    {
+        float vertLength = 0;
+        float horLength = 0;
+
+        foreach(Wall wall in roomWalls)
+        {
+            if (wall.Orientation == Vector2.down || wall.Orientation == Vector2.up) vertLength += wall.Length;
+            else horLength += wall.Length;
+        }
+
+        if (vertLength > horLength) return horLength / vertLength;
+        else return vertLength / horLength;
     }
 
     public float CalculateNewSquareScore(List<Face> nextFaces)
@@ -299,8 +315,14 @@ public class Room : IComparable<Room>
         if (shareOrigin.Count > 1 && shareOrigin[0].IsAligned(shareOrigin[1].edges[0]) && shareOrigin[1].GetOtherRoom(this) == shareOrigin[0].GetOtherRoom(this))
         {
             // combine walls into 1
-            foreach (Edge edge in shareOrigin[1].edges) edge.wall = shareOrigin[0];
-            shareOrigin[0].edges.AddRange(shareOrigin[1].edges);
+            foreach (Edge edge in shareOrigin[1].edges)
+            {
+                edge.wall = shareOrigin[0];
+                if (!shareOrigin[0].edges.Contains(edge))
+                {
+                    shareOrigin[0].edges.Add(edge);
+                }
+            }
                 
             RemoveWall(shareOrigin[1], shareOrigin[1].GetOtherRoom(this));
         }
@@ -356,6 +378,26 @@ public class Room : IComparable<Room>
         }
 
         return false;
+    }
+
+    public List<Wall> ShortestWallPath(Room room, int maximum)
+    {
+        List<Wall> shortestWallPath = null;
+
+        foreach(Wall wall in roomWalls)
+        {
+            List<Wall> path = new List<Wall>();
+
+            List<Wall> shortest = wall.WallDistance(room, path, maximum);
+
+            if (shortestWallPath == null) shortestWallPath = shortest;
+            else
+            {
+                if (shortest.Count < shortestWallPath.Count) shortestWallPath = shortest;
+            }
+        }
+
+        return shortestWallPath;
     }
 
     public List<Room> RoomDistance(Room room, List<Room> path, int maxDistance)
@@ -499,351 +541,8 @@ public class Room : IComparable<Room>
 
 }
 
-public class Wall : IComparable<Wall>
-{
-    public List<Edge> edges;
-    protected float length = 0;
-    protected Vector2 orientation;
 
-    public List<Room> rooms;
-    public List<Wall> adjacentWalls = new List<Wall>();
-    public Door door = null;
 
-    public List<GameObject> objects = new List<GameObject>();
 
-    public Vector2 Orientation { get => orientation; }
-    public float Length { get => length; }
-
-    public Wall()
-    {
-        this.edges = new List<Edge>();
-    }
-
-    public Wall(Room room1, Room room2, Vector2 orientation)
-    {
-        this.edges = new List<Edge>();
-        rooms = new List<Room> { room1, room2 };
-        this.orientation = orientation;
-    }
-
-    public Wall(Edge edge)
-    {
-        this.edges = new List<Edge>();
-        edges.Add(edge);
-        rooms = new List<Room> { edge.faces[0].room, edge.faces[1].room };
-    }
-    public int CompareTo(Wall other)
-    {
-        if (other.length < length) return -1;
-        else if (other.length > length) return 1;
-        else return 0;
-    }
-
-    public bool CheckFit(Edge edge)
-    {
-        Edge check = edges[0];
-
-        if (!edges.Contains(edge) && (rooms.Contains(check.faces[0].room) && rooms.Contains(check.faces[1].room))
-            && (edge.Direction == orientation || edge.Direction == -orientation))
-        {
-            foreach(Edge edge1 in edges)
-            {
-                if (edge1.FindCommonVertex(edge) != null)
-                {
-                    edges.Add(edge);
-                    return true;
-                }
-            }
-            return false;
-            
-        } else
-        {
-            return false;
-        }
-    }
-
-    public Vector2 GetExteriorDirection()
-    {
-        return (edges[0].transform.position - edges[0].faces[0].transform.position).normalized;
-    }
-
-    public void Calculate()
-    {
-        float len = 0;
-        // length of wall
-        foreach (Edge edge in edges)
-        {
-            len += edge.GetLength();
-        }
-
-        length = len;
-
-        orientation = (edges[0].transform.position - edges[0].faces[0].transform.position).normalized;
-    }
-
-    public bool IsAligned(Edge edge)
-    {
-        if (edges.Count == 0) return true;
-        else if (edges[0].Direction == edge.Direction || edges[0].Direction == -edge.Direction) return true;
-        else return false;
-    }
-
-    public Room GetOtherRoom(Room room)
-    {
-        return edges[0].GetOtherRoom(room);
-    }
-
-    public void FindAdjacentWalls()
-    {
-        foreach(Edge edge in edges)
-        {
-            foreach(Edge edge1 in edge.Vertex1.edges)
-            {
-                if (edge1.wall != this && !adjacentWalls.Contains(edge1.wall))
-                {
-                    adjacentWalls.Add(edge1.wall);
-                }
-            }
-
-            foreach (Edge edge1 in edge.Vertex2.edges)
-            {
-                if (edge1.wall != this && !adjacentWalls.Contains(edge1.wall))
-                {
-                    adjacentWalls.Add(edge1.wall);
-                }
-            }
-        }
-
-
-    }
-
-
-    public List<Wall> WallDistance(Room room, List<Wall> path, int maxDistance)
-    {
-        if (rooms.Contains(room))
-        {
-            path.Add(this);
-            return path;
-        }
-        else
-        {
-            path.Add(this);
-
-            List<Wall> shortestPath = path;
-            int minimum = maxDistance;
-
-            if (shortestPath.Count > maxDistance)
-            {
-                Debug.Log("path not found");
-                return null;
-            }
-
-            foreach (Wall wall in adjacentWalls)
-            {
-                if (wall == null || path.Contains(wall)) continue;
-                else
-                {
-                    List<Wall> currentPath = new List<Wall>();
-                    currentPath.AddRange(path);
-
-                    List<Wall> nextPath = wall.WallDistance(room, currentPath, maxDistance);
-                    int distance = nextPath.Count;
-                    if (distance < minimum) { minimum = distance; shortestPath = nextPath; }
-                }
-            }
-
-            return shortestPath;
-        }
-    }
-
-    public List<Face> GetFacesInDirection(Vector2 direction)
-    {
-        List<Face> faces = new List<Face>();
-
-        foreach (Edge edge in edges)
-        {
-            Face face = edge.GetFaceInDirection(direction);
-            if (face == null) return null;
-            else faces.Add(face);
-        }
-
-        return faces;
-    }
-
-    public List<Vertex> FindEnds()
-    {
-        int count = edges.Count;
-        List<Vertex> ends = new List<Vertex>();
-
-        foreach (Edge edge in edges)
-        {
-            if (edge.Vertex1.IsEdgeOfWall(this) && !ends.Contains(edge.Vertex1)) ends.Add(edge.Vertex1);
-            if (edge.Vertex2.IsEdgeOfWall(this) && !ends.Contains(edge.Vertex2)) ends.Add(edge.Vertex2);
-        }
-
-        return ends;
-    }
-
-    public Door PlaceInteriorDoor(float width, Door doorPrefab)
-    {
-        door = UnityEngine.Object.Instantiate(doorPrefab);
-        door.wall = this;
-        door.rooms = rooms;
-
-        Calculate();
-        Edge origin = edges[0];
-
-        List<Vertex> ends = FindEnds();
-        Vertex v = ends[0];
-        Vector3 dir = (ends[1].transform.position - ends[0].transform.position).normalized;
-        door.transform.localScale = new Vector3(width, 0.2f, 1);
-        door.transform.rotation = origin.transform.rotation;
-        door.transform.position = v.transform.position + dir * (length/2);
-
-        objects.Add(door.gameObject);
-
-        return door;
-    }
-
-
-
-    public void Recolor(Color color)
-    {
-        foreach(Edge edge in edges)
-        {
-            edge.Recolor(color);
-        }
-    }
-}
-
-public class ExternalWall : Wall
-{ 
-    private int maxWindowsNumber = 0;
-    public int windowsNumber = 0;
-    private bool hasDoor = false;
-    private float gap = 0;
-
-
-
-    public int MaxWindowsNumber { get => maxWindowsNumber; set => maxWindowsNumber = value; }
-
-    public ExternalWall()
-    {
-        this.edges = new List<Edge>();
-    }
-
-
-
-    public void Calculate(float windowWidth, float gap)
-    {
-        Calculate();
-
-        // max number of windows
-        maxWindowsNumber = (int)((length - gap) / (windowWidth + gap));
-    }
-
-
-
-    public GameObject SetupDoor(float doorWidth, float windowWidth, float gap, GameObject doorPrefab)
-    { 
-        this.gap = gap;
-        hasDoor = true;
-
-        Edge origin = edges[0];
-        GameObject door = UnityEngine.Object.Instantiate(doorPrefab);
-        door.transform.localScale = new Vector3(doorWidth, 0.2f, 1);
-        door.transform.rotation = origin.transform.rotation;
-        objects.Add(door);
-
-        // recalculate max number of windows
-        maxWindowsNumber = (int) ((length - door.transform.localScale.x - gap * 2) / (windowWidth + gap));
-
-        return door;
-    }
-
-    public List<GameObject> SetupWindows(float windowWidth, GameObject windowPrefab)
-    {
-        // fill the wall with proper number of windows, but don't position them yet
-        List<GameObject> windows = new List<GameObject>();
-
-        for (int i = 0; i < windowsNumber; i++)
-        {
-            Edge origin = edges[0];
-            GameObject window = UnityEngine.Object.Instantiate(windowPrefab);
-            window.transform.localScale = new Vector3(windowWidth, 0.2f, 1);
-            window.transform.rotation = origin.transform.rotation;
-
-            objects.Add(window);
-            windows.Add(window);
-        }
-
-        return windows;
-    }
-    public void SetupAll()
-    {
-        // position everything 
-        // check how much space will be left for gaps
-        float emptySpace = length;
-
-        //Debug.Log(objects.Count);
-
-        foreach(GameObject obj in objects)
-        {
-            emptySpace -= obj.transform.localScale.x;
-        }
-
-        // divide it between objects
-        float correctGap = emptySpace / (objects.Count + 1);
-
-        Vector3 pos = edges[0].Vertex1.transform.position;
-        Vector3 dir = edges[0].Direction;
-
-        // place everything
-        foreach (GameObject obj in objects)
-        {
-            pos += dir * (correctGap + obj.transform.localScale.x / 2);
-            obj.transform.transform.position = pos;
-            pos += dir * (obj.transform.localScale.x / 2);
-        }
-    }
-
-    // connect faces that share a window or door
-    public void ConnectSharingCells()
-    {
-        foreach (GameObject obj in objects)
-        {
-            List<Face> faces = new List<Face>();
-            List<Collider2D> colliders = new List<Collider2D>();
-
-            Physics2D.OverlapCollider(obj.GetComponent<Collider2D>(), new ContactFilter2D().NoFilter(), colliders);
-
-            // check which edges overlap with the window/door
-            foreach(Collider2D collider in colliders)
-            {
-                if (collider.gameObject.tag == "Edge")
-                {
-                    Edge edge = collider.gameObject.GetComponent<Edge>();
-                    if (edges.Contains(edge))
-                    {
-                        faces.Add(edge.faces[0]);
-                    }
-                }
-            }
-
-            foreach(Face face in faces)
-            {
-                // Debug
-
-                foreach(Face other in faces)
-                {
-                    if (face == other) break;
-                    if (obj.tag == "Window") face.ConnectToFace(other);
-                    else face.ConnectToFace(other, true);
-                }
-            }
-        }
-    }
-
-}
 
 

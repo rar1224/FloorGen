@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using UnityEngine.SocialPlatforms.Impl;
 using Random = UnityEngine.Random;
 
 
@@ -14,7 +11,16 @@ public class Generator : MonoBehaviour
     public SaveJSON save;
     public GameObject envelope;
     public bool optimize;
+    public bool superOptimize;
     public bool rectangleExpansion;
+
+    public float maxCellHeight;
+    public float maxCellWidth;
+    public float minSize;
+    public float frontDoorWidth;
+    public float windowWidth;
+    public int windowNumber;
+    public float gap;
 
     public Vertex vertexPrefab;
     public Edge edgePrefab;
@@ -37,6 +43,9 @@ public class Generator : MonoBehaviour
     private List<Vertex> startLoop = new List<Vertex>();
     private List<Vertex> nextLoop = new List<Vertex>();
     private int startLoopCount = 0;
+
+    private int maxLoops = 10;
+    private int loopCounter = 0;
 
     Vector2[] directions = {Vector2.right, Vector2.down, Vector2.left, Vector2.up};
     // Start is called before the first frame update
@@ -74,10 +83,6 @@ public class Generator : MonoBehaviour
 
     private void FixedUpdate()
     {
-        float windowWidth = 1f;
-        float frontDoorWidth = 3f;
-        float gap = 0.5f;
-
         if (status == Status.DividingOnAngles)
         {
             // preparatory dividing of the envelope on angles
@@ -94,7 +99,7 @@ public class Generator : MonoBehaviour
             // dividing envelope into smaller cells
 
 
-            startLoop = DivideToCells(2.8f, 2.8f, true, true);
+            startLoop = DivideToCells(maxCellHeight, maxCellWidth, true, true, minSize);
             status++;
             return;
 
@@ -130,7 +135,7 @@ public class Generator : MonoBehaviour
             // placing windows and doors
 
             allDoors.Add(PlaceFrontDoor(frontDoorWidth, windowWidth, gap, optimize));
-            allWindows.AddRange(PlaceWindows(7, windowWidth, gap, optimize));
+            allWindows.AddRange(PlaceWindows(7, windowWidth, gap, optimize, superOptimize));
 
             status++;
         } 
@@ -146,8 +151,20 @@ public class Generator : MonoBehaviour
 
         else if (status == Status.MakingRooms)
         {
-            SetupRoomsFull();
-            status++;
+            if (loopCounter > maxLoops)
+            {
+                // too many loops, try resetting door and windows
+                RemoveExteriorObjects();
+                status = Status.PlacingObjects;
+                loopCounter = 0;
+            } else
+            {
+                SetupRoomsFull();
+                loopCounter++;
+                Debug.Log(loopCounter);
+                status++;
+            }
+            
         } 
         else if (status == Status.ExpandingRooms) {
 
@@ -165,36 +182,55 @@ public class Generator : MonoBehaviour
             FillIslands();
             status++;
 
-        } else if (status == Status.MakingCorridors)
+        } 
+        else if (status == Status.MakingCorridors)
         {
             FindAllWalls();
 
-            //UnityEngine.Debug.Log("Room walls: " + allRooms[4].roomWalls.Count);
-
-            //MakeCorridor(allRooms[0], allRooms[allRooms.Count - 1]);
-            MakeAllCorridors();
+            bool corridorsMade = MakeAllCorridors();
 
             status++;
 
-        }  else if (status == Status.FixingWalls)
+            if (!corridorsMade)
+            {
+                ResetRooms();
+                status = Status.MakingRooms;
+            }
+        }
+         else if (status == Status.FixingWalls)
         {
             ResetWalls();
             FindAllWalls();
-            status++;
-
             ResetExteriorObjects();
 
+            status++;
+            
             if (optimize)
             {
-                if (!CheckValidity(3f))
+                if (!superOptimize)
                 {
-                    ResetRooms();
-                    status = Status.MakingRooms;
-                }
-                else
+                    if (!CheckValidity(3f))
+                    {
+                        ResetRooms();
+                        status = Status.MakingRooms;
+                    }
+                    else
+                    {
+                        DefineRoomsOptimize();
+                    }
+                } else
                 {
-                    DefineRoomsOptimize();
+                    if (!CheckValidity(0.5f))
+                    {
+                        ResetRooms();
+                        status = Status.MakingRooms;
+                    }
+                    else
+                    {
+                        DefineRoomsSuperoptimize();
+                    }
                 }
+                
             } else
             {
                 if (!CheckValidity(3f))
@@ -204,14 +240,13 @@ public class Generator : MonoBehaviour
                 }
                 else
                 {
-                    DefineRoomsOptimize();
+                    DefineRooms();
                 }
             }  
 
         } 
         else if (status == Status.Saving)
         {
-            //ResetExteriorObjects();
             save.SaveIntoJson(allRoomWalls, allRooms, windowWidth, frontDoorWidth);
             status++;
         } 
@@ -290,6 +325,8 @@ public class Generator : MonoBehaviour
             {
                 foreach (Vertex vertex in newVertices)
                 {
+                    if (origin.IsConnectedTo(vertex)) continue;
+
                     Edge connect = Instantiate(edgePrefab);
                     connect.Vertex1 = origin;
                     connect.Vertex2 = vertex;
@@ -306,7 +343,7 @@ public class Generator : MonoBehaviour
             }
     }
 
-    public List<Vertex> DivideToCells(float maxCellHeight, float maxCellWidth, bool fromTop, bool fromLeft, float minDistance = 0.5f)
+    public List<Vertex> DivideToCells(float maxCellHeight, float maxCellWidth, bool fromTop, bool fromLeft, float minDistance)
     {
         List<Vertex> newVertices = new List<Vertex>();
         List<Edge> newEdges = new List<Edge>();
@@ -555,7 +592,7 @@ public class Generator : MonoBehaviour
         return wall.SetupDoor(doorWidth, windowWidth, gap, doorPrefab);
     }
 
-    public List<GameObject> PlaceWindows(int number, float width, float gap, bool optimize)
+    public List<GameObject> PlaceWindows(int number, float width, float gap, bool optimize, bool superOptimize)
     {
         // directions and numbers of windows that can be placed on each
         // all walls for each direction (north, south...) counted together
@@ -591,6 +628,7 @@ public class Generator : MonoBehaviour
             } else
             {
                 ext.preference = 1;
+                if (superOptimize) ext.preference = 0;
             }
             
 
@@ -1091,6 +1129,10 @@ public class Generator : MonoBehaviour
                 }
             }
 
+            if (chosen.Key == null) {
+                Debug.Log("chosen null");
+            }
+
             foreach(Face face in list)
             {
                 face.SetRoom(chosen.Key, Vector2.zero);
@@ -1183,7 +1225,7 @@ public class Generator : MonoBehaviour
         }
     }
 
-    public void MakeAllCorridors()
+    public bool MakeAllCorridors()
     {
         // make the entrance connect to every room
 
@@ -1217,8 +1259,17 @@ public class Generator : MonoBehaviour
 
                 if (!connectedToCorridor)
                 {
-                    newCorridor = MakeCorridor(room, corridors.LastOrDefault());
+                    foreach(Room cor in corridors)
+                    {
+                        newCorridor = MakeCorridor(room, cor);
+                        if (newCorridor != null) break;
+                    }
+                    
                     corridors.Add(newCorridor);
+
+                    ResetWalls();
+                    FindAllWalls();
+
                     allConnected = false;
                     break;
                 }
@@ -1227,15 +1278,17 @@ public class Generator : MonoBehaviour
             if (allConnected)
             {
                 UnityEngine.Debug.Log("new corridors not needed");
-                return;
+                return true;
             } else if (newCorridor == null)
             {
                 UnityEngine.Debug.Log("can't find corridor");
-                return;
+                return false;
             }
         }
 
-        
+        UnityEngine.Debug.Log("can't connect everything");
+        return false;
+
     }
 
     public Room MakeCorridor(Room room1, Room room2)
@@ -1245,8 +1298,7 @@ public class Generator : MonoBehaviour
         //List<Room> path = new List<Room>();
         //UnityEngine.Debug.Log(room1.RoomDistance(room2, path, 10));
 
-        List<Wall> path = new List<Wall>();
-        List<Wall> shortest = room1.roomWalls[0].WallDistance(room2, path, 50);
+        List<Wall> shortest = room1.ShortestWallPath(room2, 50);
 
         List<List<Face>> corridorOptions = new List<List<Face>>();
         bool first = true;
@@ -1261,7 +1313,7 @@ public class Generator : MonoBehaviour
             wall.Recolor(Color.green);
 
             
-            Vector2 dir1 = wall.Orientation.Perpendicular1();
+            Vector2 dir1 = wall.Orientation;
             Vector2 dir2 = -dir1;
 
             List<Face> corridor1 = wall.GetFacesInDirection(dir1);
@@ -1503,6 +1555,24 @@ public class Generator : MonoBehaviour
         return doors;
     }
 
+    public void RemoveExteriorObjects()
+    {
+        foreach(GameObject window in allWindows)
+        {
+            Destroy(window);
+        }
+
+        foreach(GameObject door in allDoors)
+        {
+            Destroy(door);
+        }
+
+        foreach(ExternalWall wall in allWalls)
+        {
+            wall.RemoveExteriorObjects();
+        }
+    }
+
     public void ResetExteriorObjects()
     {
         foreach(Edge edge in allEdges)
@@ -1531,12 +1601,12 @@ public class Generator : MonoBehaviour
         foreach(Room room in allRooms)
         {
             // size of rooms
-            if (room.area < minArea) return false;
-
             if (room.corridor) continue;
 
+            if (room.area < minArea) return false;
+
             // ratio
-            if (room.GetRatio() < 0.5)
+            if (room.GetRatio() < 0.4)
             {
                 return false;
             }
@@ -1591,7 +1661,6 @@ public class Generator : MonoBehaviour
     public void DefineRoomsOptimize()
     {
         allRooms.Sort();
-        List<string> definitions = new List<string> { "living_room", "bedroom", "kitchen", "bathroom" };
         List<Room> roomsToDefine = new List<Room>();
 
         foreach (Room room in allRooms)
@@ -1604,37 +1673,6 @@ public class Generator : MonoBehaviour
             {
                 room.name = "corridor";
             }
-        }
-
-        if (!roomsToDefine[0].HasWindows())
-        {
-            roomsToDefine[0].name = "bathroom";
-            roomsToDefine[1].name = "kitchen";
-        } else if (!roomsToDefine[1].HasWindows())
-        {
-            roomsToDefine[1].name = "bathroom";
-            roomsToDefine[0].name = "kitchen";
-        } else if(roomsToDefine[0].outOrientations.ContainsKey(Vector2.down)
-            || roomsToDefine[0].outOrientations.ContainsKey(Vector2.right))
-        {
-            roomsToDefine[0].name = "bathroom";
-            roomsToDefine[1].name = "kitchen";
-        } else
-        {
-            roomsToDefine[1].name = "bathroom";
-            roomsToDefine[0].name = "kitchen";
-        }
-
-        if (roomsToDefine[3].outOrientations.ContainsKey(Vector2.up) ||
-            roomsToDefine[3].outOrientations.ContainsKey(Vector2.left))
-        {
-            roomsToDefine[3].name = "bedroom";
-            roomsToDefine[2].name = "living_room";
-        }
-        else
-        {
-            roomsToDefine[2].name = "bedroom";
-            roomsToDefine[3].name = "living_room";
         }
 
         List<RoomType> types = new List<RoomType> {
@@ -1670,6 +1708,57 @@ public class Generator : MonoBehaviour
         foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
     }
 
+    public void DefineRoomsSuperoptimize()
+    {
+        allRooms.Sort();
+        List<Room> roomsToDefine = new List<Room>();
+
+        foreach (Room room in allRooms)
+        {
+            if (!room.corridor)
+            {
+                roomsToDefine.Add(room);
+                room.CalculateWallOrientation();
+            }
+            else
+            {
+                room.name = "corridor";
+            }
+        }
+
+        List<RoomType> types = new List<RoomType> {
+            new RoomType("bathroom", new List<Vector2> {Vector2.down, Vector2.right}, 0, 0, 1, false),
+            new RoomType("living_room", new List<Vector2> {Vector2.down, Vector2.right}, 1, 1, 1, false),
+            new RoomType("bedroom", new List<Vector2> { Vector2.up, Vector2.left }, 3, 3, 3, false),
+            new RoomType("kitchen", new List<Vector2> { Vector2.up, Vector2.left }, 2, 2, 3, false)
+        };
+
+        List<Room> leftToDefine = new List<Room>();
+        leftToDefine.AddRange(roomsToDefine);
+
+        foreach (RoomType type in types)
+        {
+            Room chosen = leftToDefine[0];
+            int highScore = -10;
+
+            foreach (Room room in leftToDefine)
+            {
+                int score = type.GetScore(room, roomsToDefine);
+                if (score > highScore)
+                {
+                    chosen = room;
+                    highScore = score;
+                }
+            }
+
+            leftToDefine.Remove(chosen);
+            chosen.name = type.name;
+        }
+
+
+        foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
+    }
+
     public void ResetRooms()
     {
         ResetWalls();
@@ -1685,8 +1774,8 @@ public class Generator : MonoBehaviour
 
 
     enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
-        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps,
-        MakingCorridors, FixingWalls, Saving, Completed }
+        FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, MakingCorridors, FixingWalls,
+        Saving, Completed }
 
     public class Expansion : IComparable<Expansion>
     {

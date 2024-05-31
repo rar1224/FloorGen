@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -93,21 +92,27 @@ public class Face : MonoBehaviour {
 
         foreach (Face connectedFace1 in face.connectedFaces)
         {
+            if(forFrontDoor) connectedFace1.hasFrontDoor = true;
+
             if (!connectedFaces.Contains(connectedFace1)) connectedFaces.Add(connectedFace1);
 
             foreach(Face connectedFace in connectedFaces)
             {
                 if (!connectedFace.connectedFaces.Contains(connectedFace1)) connectedFace.connectedFaces.Add(connectedFace1);
+                if (forFrontDoor) connectedFace.hasFrontDoor = true;
             }
         }
 
         foreach (Face connectedFace in connectedFaces)
         {
+            if (forFrontDoor) connectedFace.hasFrontDoor = true;
+
             if (!face.connectedFaces.Contains(connectedFace)) face.connectedFaces.Add(connectedFace);
 
             foreach(Face connectedFace1 in face.connectedFaces)
             {
                 if (!connectedFace1.connectedFaces.Contains(connectedFace)) connectedFace1.connectedFaces.Add(connectedFace);
+                if (forFrontDoor) connectedFace1.hasFrontDoor = true;
             }
         }
         
