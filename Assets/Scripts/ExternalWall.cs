@@ -3,14 +3,9 @@ using UnityEngine;
 
 public class ExternalWall : Wall
 {
-    private int maxWindowsNumber = 0;
+    public int maxWindowsNumber = 0;
     public int windowsNumber = 0;
-    private bool hasDoor = false;
     private float gap = 0;
-
-
-
-    public int MaxWindowsNumber { get => maxWindowsNumber; set => maxWindowsNumber = value; }
 
     public ExternalWall()
     {
@@ -32,7 +27,6 @@ public class ExternalWall : Wall
     public GameObject SetupDoor(float doorWidth, float windowWidth, float gap, GameObject doorPrefab)
     {
         this.gap = gap;
-        hasDoor = true;
 
         Edge origin = edges[0];
         GameObject door = UnityEngine.Object.Instantiate(doorPrefab);
@@ -139,8 +133,6 @@ public class ExternalWall : Wall
             edge.faces[0].hasFrontDoor = false;
             edge.faces[0].hasWindows = false;
         }
-
-        hasDoor = false;
         windowsNumber = 0;
         door = null;
     }

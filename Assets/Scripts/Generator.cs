@@ -7,7 +7,7 @@ using Random = UnityEngine.Random;
 
 public class Generator : MonoBehaviour
 {
-    private Status status;
+    private Status status = Status.Idle;
     public SaveJSON save;
     public GameObject envelope;
     public bool optimize;
@@ -29,6 +29,8 @@ public class Generator : MonoBehaviour
     public GameObject doorPrefab;
     public Door interiorDoorPrefab;
 
+    public UIController controller;
+
     //private List<Face> faces = new List<Face>();
     public List<Vertex> allVertices = new List<Vertex>();
     public List<Edge> allEdges = new List<Edge>();
@@ -48,42 +50,55 @@ public class Generator : MonoBehaviour
     private int loopCounter = 0;
 
     Vector2[] directions = {Vector2.right, Vector2.down, Vector2.left, Vector2.up};
-    // Start is called before the first frame update
-    void Start()
+
+    public void SetParameters(float maxCellHeight,  float maxCellWidth, float minCellSize, float frontDoorWidth,
+        float windowWidth, int windowNumber, float gap, bool optimize, bool superOptimize, bool rectangleExpansion)
     {
-        List<Edge> edges = new List<Edge>();
-
-        for (int i = 0; i < envelope.transform.childCount; i++)
-        {
-            int j = i + 1;
-            if (j == envelope.transform.childCount) j = 0;
-
-            Vertex vertex1 = envelope.transform.GetChild(i).GetComponent<Vertex>();
-            Vertex vertex2 = envelope.transform.GetChild(j).GetComponent<Vertex>();
-
-            Edge edge = Instantiate(edgePrefab);
-            edge.Vertex1 = vertex1;
-            edge.Vertex2 = vertex2;
-            edge.IsExterior = true;
-            edge.UpdatePosition();
-
-            vertex1.edges.Add(edge);
-            vertex2.edges.Add(edge);
-
-            edges.Add(edge);
-            startLoop.Add(vertex1);
-
-            allEdges.Add(edge);
-            allVertices.Add(vertex1);
-        }
-
-        //start = new Face(edges);
-        //faces.Add(start);
+        this.maxCellHeight = maxCellHeight;
+        this.maxCellWidth = maxCellWidth;
+        this.minSize = minCellSize;
+        this.frontDoorWidth = frontDoorWidth;
+        this.windowWidth = windowWidth;
+        this.windowNumber = windowNumber;
+        this.gap = gap;
+        this.optimize = optimize;
+        this.superOptimize = superOptimize;
+        this.rectangleExpansion = rectangleExpansion;
     }
 
     private void FixedUpdate()
     {
-        if (status == Status.DividingOnAngles)
+        if (status == Status.DefiningShape)
+        {
+            List<Edge> edges = new List<Edge>();
+
+            for (int i = 0; i < envelope.transform.childCount; i++)
+            {
+                int j = i + 1;
+                if (j == envelope.transform.childCount) j = 0;
+
+                Vertex vertex1 = envelope.transform.GetChild(i).GetComponent<Vertex>();
+                Vertex vertex2 = envelope.transform.GetChild(j).GetComponent<Vertex>();
+
+                Edge edge = Instantiate(edgePrefab);
+                edge.Vertex1 = vertex1;
+                edge.Vertex2 = vertex2;
+                edge.IsExterior = true;
+                edge.UpdatePosition();
+
+                vertex1.edges.Add(edge);
+                vertex2.edges.Add(edge);
+
+                edges.Add(edge);
+                startLoop.Add(vertex1);
+
+                allEdges.Add(edge);
+                allVertices.Add(vertex1);
+            }
+
+            status++;
+        }
+        else if (status == Status.DividingOnAngles)
         {
             // preparatory dividing of the envelope on angles
 
@@ -159,10 +174,19 @@ public class Generator : MonoBehaviour
                 loopCounter = 0;
             } else
             {
-                SetupRoomsFull();
-                loopCounter++;
-                Debug.Log(loopCounter);
-                status++;
+                if (SetupRoomsFull())
+                {
+                    loopCounter++;
+                    Debug.Log(loopCounter);
+                    status++;
+                } else
+                {
+                    // door not valid
+                    RemoveExteriorObjects();
+                    status = Status.PlacingObjects;
+                    loopCounter = 0;
+                }
+                
             }
             
         } 
@@ -249,7 +273,14 @@ public class Generator : MonoBehaviour
         {
             save.SaveIntoJson(allRoomWalls, allRooms, windowWidth, frontDoorWidth);
             status++;
+
+            controller.SetReadyToRestart();
         } 
+    }
+
+    public void StartGenerating()
+    {
+        status = Status.DefiningShape;
     }
 
     public void DivideCurrentLoop()
@@ -670,7 +701,7 @@ public class Generator : MonoBehaviour
             {
                 foreach(ExternalWall wall in ext.possibleWalls)
                 {
-                    if (wall.windowsNumber < wall.MaxWindowsNumber) { wall.windowsNumber++; break; }
+                    if (wall.windowsNumber < wall.maxWindowsNumber) { wall.windowsNumber++; break; }
                 }
             }
 
@@ -736,7 +767,7 @@ public class Generator : MonoBehaviour
         }
     }
 
-    public void SetupRoomsFull()
+    public bool SetupRoomsFull()
     {
         List<Face> exteriorFaces = new List<Face>();
         Face entranceFace = null;
@@ -756,6 +787,10 @@ public class Generator : MonoBehaviour
         int number = 5;
         int spread = exteriorFaces.Count / number;
 
+        if (entranceFace == null)
+        {
+            return false;
+        }
         
         // entrance room
         Room entrance = new Room(2, entranceFace, Color.green);
@@ -796,6 +831,8 @@ public class Generator : MonoBehaviour
         allRooms.Add(r2);
         allRooms.Add(r3);
         allRooms.Add(r4);
+
+        return true;
     }
 
     public int ExpandRooms()
@@ -1088,8 +1125,6 @@ public class Generator : MonoBehaviour
                 }
             }
         }
-
-        string counts = "";
 
         foreach(List<Face> list in islands)
         {
@@ -1771,11 +1806,44 @@ public class Generator : MonoBehaviour
         allRooms.Clear();
     }
 
+    public void ResetAll()
+    {
+        foreach (Vertex v in allVertices) Destroy(v.gameObject);
+        allVertices.Clear();
+
+        foreach (Edge e in allEdges) Destroy(e.gameObject);
+        allEdges.Clear();
+
+        foreach (Face f in allFaces) Destroy(f.gameObject);
+        allFaces.Clear();
+
+        allWalls.Clear();
+        allRoomWalls.Clear();
+
+        foreach (GameObject d in allDoors) Destroy(d.gameObject);
+        allDoors.Clear();
+
+        foreach (GameObject w in allWindows) Destroy(w.gameObject);
+        allWindows.Clear();
+
+        allRooms.Clear();
+
+        loopCounter = 0;
+        startLoop = new List<Vertex>();
+        nextLoop = new List<Vertex>();
+        startLoopCount = 0;
+    }
+
+    public void Cancel()
+    {
+        status = Status.Idle;
+    }
 
 
-    enum Status { DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
+
+    enum Status { DefiningShape, DividingOnAngles, DividingEnvelopeIntoCells, DividingAllIntoCells,
         FindingFaces, PlacingObjects, ConnectingSharingCells, MakingRooms, ExpandingRooms, FillingGaps, MakingCorridors, FixingWalls,
-        Saving, Completed }
+        Saving, Idle }
 
     public class Expansion : IComparable<Expansion>
     {
