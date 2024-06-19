@@ -24,6 +24,7 @@ public class UIController : MonoBehaviour
 
     public Button startButton;
     public Button resetButton;
+    public Button rerunButton;
 
     private bool resetGenerator = false;
 
@@ -34,6 +35,7 @@ public class UIController : MonoBehaviour
 
         startButton.interactable = false;
         resetButton.interactable = true;
+        rerunButton.interactable = false;
     }
 
     public void SetDefaults()
@@ -80,6 +82,19 @@ public class UIController : MonoBehaviour
                 startButton.interactable = true;
             }
         }
+    }
+
+    public void Rerun()
+    {
+        bool optimize = optimizationBar.value > 0;
+        bool superOptimize = optimizationBar.value == 1;
+
+        generator.SetGenParameters(
+        float.Parse(frontDoorWidth.text, System.Globalization.CultureInfo.InvariantCulture),
+            float.Parse(windowWidth.text, System.Globalization.CultureInfo.InvariantCulture),
+            int.Parse(windowNumber.text),
+            float.Parse(minGapBetween.text, System.Globalization.CultureInfo.InvariantCulture), optimize, superOptimize, optimizedExpansion.isOn);
+        generator.Rerun();
     }
 
     public void StartGenerating()
@@ -142,6 +157,7 @@ public class UIController : MonoBehaviour
 
     public void SetReadyToRestart()
     {
+        rerunButton.interactable = true;
         resetButton.interactable = true;
     }
 

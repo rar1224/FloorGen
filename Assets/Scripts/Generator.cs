@@ -66,6 +66,18 @@ public class Generator : MonoBehaviour
         this.rectangleExpansion = rectangleExpansion;
     }
 
+    public void SetGenParameters(float frontDoorWidth, float windowWidth, int windowNumber, float gap,
+        bool optimize, bool superOptimize, bool rectangleExpansion)
+    {
+        this.frontDoorWidth = frontDoorWidth;
+        this.windowWidth = windowWidth;
+        this.windowNumber = windowNumber;
+        this.gap = gap;
+        this.optimize = optimize;
+        this.superOptimize = superOptimize;
+        this.rectangleExpansion = rectangleExpansion;
+    }
+
     private void FixedUpdate()
     {
         if (status == Status.DefiningShape)
@@ -150,7 +162,7 @@ public class Generator : MonoBehaviour
             // placing windows and doors
 
             allDoors.Add(PlaceFrontDoor(frontDoorWidth, windowWidth, gap, optimize));
-            allWindows.AddRange(PlaceWindows(7, windowWidth, gap, optimize, superOptimize));
+            allWindows.AddRange(PlaceWindows(windowNumber, windowWidth, gap, optimize, superOptimize));
 
             status++;
         } 
@@ -177,7 +189,7 @@ public class Generator : MonoBehaviour
                 if (SetupRoomsFull())
                 {
                     loopCounter++;
-                    Debug.Log(loopCounter);
+                    //Debug.Log(loopCounter);
                     status++;
                 } else
                 {
@@ -233,7 +245,7 @@ public class Generator : MonoBehaviour
             {
                 if (!superOptimize)
                 {
-                    if (!CheckValidity(3f))
+                    if (!CheckValidity(4f))
                     {
                         ResetRooms();
                         status = Status.MakingRooms;
@@ -244,7 +256,7 @@ public class Generator : MonoBehaviour
                     }
                 } else
                 {
-                    if (!CheckValidity(0.5f))
+                    if (!CheckValidity(1f))
                     {
                         ResetRooms();
                         status = Status.MakingRooms;
@@ -257,7 +269,7 @@ public class Generator : MonoBehaviour
                 
             } else
             {
-                if (!CheckValidity(3f))
+                if (!CheckValidity(4f))
                 {
                     ResetRooms();
                     status = Status.MakingRooms;
@@ -281,6 +293,12 @@ public class Generator : MonoBehaviour
     public void StartGenerating()
     {
         status = Status.DefiningShape;
+    }
+
+    public void Rerun()
+    {
+        ResetRoomGenerator();
+        status = Status.FindingFaces;
     }
 
     public void DivideCurrentLoop()
@@ -1164,10 +1182,6 @@ public class Generator : MonoBehaviour
                 }
             }
 
-            if (chosen.Key == null) {
-                Debug.Log("chosen null");
-            }
-
             foreach(Face face in list)
             {
                 face.SetRoom(chosen.Key, Vector2.zero);
@@ -1312,7 +1326,7 @@ public class Generator : MonoBehaviour
 
             if (allConnected)
             {
-                UnityEngine.Debug.Log("new corridors not needed");
+                //UnityEngine.Debug.Log("new corridors not needed");
                 return true;
             } else if (newCorridor == null)
             {
@@ -1384,7 +1398,7 @@ public class Generator : MonoBehaviour
             corridorOptions = newOptions;
         }
 
-        UnityEngine.Debug.Log("Corridor options: " + corridorOptions.Count);
+        //UnityEngine.Debug.Log("Corridor options: " + corridorOptions.Count);
         List<List<Face>> fullCorridors = new List<List<Face>>();
 
         
@@ -1441,7 +1455,11 @@ public class Generator : MonoBehaviour
            
         while(current != lastFace)
         {
-                if (counter > 200) { UnityEngine.Debug.Log("corridor not found"); return null; }
+                if (counter > 200) {
+                    UnityEngine.Debug.Log("corridor not found");
+                    return null;
+                }
+
                 counter++;
                 current.AddWithConnectedFaces(fullCorridor);
                 passedFaces.Add(current);
@@ -1676,8 +1694,13 @@ public class Generator : MonoBehaviour
         allRooms.Sort();
 
         int corridorNr = 0;
-        int nameIndex = 0;
-        List<string> roomNames = new List<string>{"bathroom", "kitchen", "bedroom", "living_room"};
+        int index = 0;
+        //List<string> roomNames = new List<string>{"bathroom", "kitchen", "bedroom", "living_room"};
+        List<RoomType> types = new List<RoomType>
+        {
+            new RoomType("bathroom", Color.cyan), new RoomType("kitchen", Color.yellow), new RoomType("bedroom", Color.grey),
+            new RoomType("living_room", Color.magenta)
+        };
 
         foreach(Room room in allRooms)
         {
@@ -1686,10 +1709,10 @@ public class Generator : MonoBehaviour
                 room.name = "corridor" + corridorNr++;
             } else
             {
-                room.name = roomNames[nameIndex++];
+                types[index++].AssignRoom(room);
             }
 
-            UnityEngine.Debug.Log(room.color + " " + room.name);
+            //UnityEngine.Debug.Log(room.color + " " + room.name);
         }
     }
 
@@ -1711,10 +1734,10 @@ public class Generator : MonoBehaviour
         }
 
         List<RoomType> types = new List<RoomType> {
-            new RoomType("bathroom", new List<Vector2> {Vector2.down, Vector2.right}, 0, 1, 1, false),
-            new RoomType("living_room", new List<Vector2> {Vector2.down, Vector2.right}, 1, 3, 2, true),
-            new RoomType("bedroom", new List<Vector2> { Vector2.up, Vector2.left }, 1, 3, 3, true),
-            new RoomType("kitchen", new List<Vector2> { Vector2.up, Vector2.left }, 0, 2, 3, true)
+            new RoomType("bathroom", new List<Vector2> {Vector2.down, Vector2.right}, 0, 1, 1, false, Color.cyan),
+            new RoomType("living_room", new List<Vector2> {Vector2.down, Vector2.right}, 1, 3, 2, true, Color.magenta),
+            new RoomType("bedroom", new List<Vector2> { Vector2.up, Vector2.left }, 1, 3, 3, true, Color.grey),
+            new RoomType("kitchen", new List<Vector2> { Vector2.up, Vector2.left }, 0, 2, 3, true, Color.yellow)
         };
 
         List<Room> leftToDefine = new List<Room>();
@@ -1736,11 +1759,8 @@ public class Generator : MonoBehaviour
             }
 
             leftToDefine.Remove(chosen);
-            chosen.name = type.name;
+            type.AssignRoom(chosen);
         }
-
-
-        foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
     }
 
     public void DefineRoomsSuperoptimize()
@@ -1762,10 +1782,10 @@ public class Generator : MonoBehaviour
         }
 
         List<RoomType> types = new List<RoomType> {
-            new RoomType("bathroom", new List<Vector2> {Vector2.down, Vector2.right}, 0, 0, 1, false),
-            new RoomType("living_room", new List<Vector2> {Vector2.down, Vector2.right}, 1, 1, 1, false),
-            new RoomType("bedroom", new List<Vector2> { Vector2.up, Vector2.left }, 3, 3, 3, false),
-            new RoomType("kitchen", new List<Vector2> { Vector2.up, Vector2.left }, 2, 2, 3, false)
+            new RoomType("bathroom", new List<Vector2> {Vector2.down, Vector2.right}, 0, 0, 1, false, Color.cyan),
+            new RoomType("living_room", new List<Vector2> {Vector2.down, Vector2.right}, 1, 1, 1, false, Color.magenta),
+            new RoomType("bedroom", new List<Vector2> { Vector2.up, Vector2.left }, 3, 3, 3, false, Color.grey),
+            new RoomType("kitchen", new List<Vector2> { Vector2.up, Vector2.left }, 2, 2, 3, false, Color.yellow)
         };
 
         List<Room> leftToDefine = new List<Room>();
@@ -1787,11 +1807,11 @@ public class Generator : MonoBehaviour
             }
 
             leftToDefine.Remove(chosen);
-            chosen.name = type.name;
+            type.AssignRoom(chosen);
         }
 
 
-        foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
+        //foreach (Room room in allRooms) UnityEngine.Debug.Log(room.color + " " + room.name + " " + room.GetArea());
     }
 
     public void ResetRooms()
@@ -1832,6 +1852,28 @@ public class Generator : MonoBehaviour
         startLoop = new List<Vertex>();
         nextLoop = new List<Vertex>();
         startLoopCount = 0;
+    }
+
+    public void ResetRoomGenerator()
+    {
+        foreach (Edge e in allEdges)
+        {
+            e.faces.Clear();
+            e.wall = null;
+        }
+        foreach (Face f in allFaces) Destroy(f.gameObject);
+        allFaces.Clear();
+
+        allWalls.Clear();
+        allRoomWalls.Clear();
+
+        foreach (GameObject d in allDoors) Destroy(d.gameObject);
+        allDoors.Clear();
+
+        foreach (GameObject w in allWindows) Destroy(w.gameObject);
+        allWindows.Clear();
+
+        allRooms.Clear();
     }
 
     public void Cancel()

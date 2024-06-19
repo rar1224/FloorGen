@@ -13,7 +13,10 @@ public class RoomType
     int maxWallLengthIndex;
     bool needsWindows;
 
-    public RoomType(string name, List<Vector2> orientations, int minSizeIndex, int maxSizeIndex, int maxWallLengthIndex, bool needsWindows)
+    private Color color;
+
+    public RoomType(string name, List<Vector2> orientations, int minSizeIndex, int maxSizeIndex, int maxWallLengthIndex, bool needsWindows,
+        Color color)
     {
         this.name = name;
         this.orientations = orientations;
@@ -21,6 +24,13 @@ public class RoomType
         this.maxSizeIndex = maxSizeIndex;
         this.maxWallLengthIndex = maxWallLengthIndex;
         this.needsWindows = needsWindows;
+        this.color = color;
+    }
+
+    public RoomType(string name, Color color)
+    {
+        this.name = name;
+        this.color = color;
     }
 
     public int GetScore(Room room, List<Room> roomsToDefine)
@@ -39,5 +49,12 @@ public class RoomType
         if (needsWindows && !room.HasWindows()) { score = score - 5; }
 
         return score;
+    }
+
+    public void AssignRoom(Room room)
+    {
+        room.name = name;
+        room.color = color;
+        room.Recolor(color);
     }
 }
